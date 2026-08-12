@@ -1,0 +1,138 @@
+@import "tailwindcss";
+
+/* ── SwashBooks design tokens (derived from BG Reynolds ops dashboard) ── */
+:root {
+  --bg:        #0d1117;
+  --card:      #161b22;
+  --card2:     #1c2128;
+  --border:    #30363d;
+  --coral:     #f35474;
+  --coral-dim: rgba(243, 84, 116, 0.12);
+  --amber:     #d97706;
+  --amber-dim: rgba(217, 119, 6, 0.12);
+  --green:     #10b981;
+  --green-dim: rgba(16, 185, 129, 0.12);
+  --blue:      #3b82f6;
+  --purple:    #8b5cf6;
+  --text:      #e6edf3;
+  --muted:     #b0bec8;
+  --faint:     #7a8795;
+  --gold:      #c9a227;
+  --gold-dim:  rgba(201, 162, 39, 0.14);
+  --ff-display: 'Oswald', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --ff-body:    system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --ff-mono:    'SF Mono', 'Cascadia Code', 'Courier New', monospace;
+}
+
+@theme {
+  --color-bg: var(--bg);
+  --color-card: var(--card);
+  --color-card2: var(--card2);
+  --color-bdr: var(--border);
+  --color-coral: var(--coral);
+  --color-amber: var(--amber);
+  --color-grn: var(--green);
+  --color-blu: var(--blue);
+  --color-txt: var(--text);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-gold: var(--gold);
+  --font-display: var(--ff-display);
+  --font-body: var(--ff-body);
+  --font-mono: var(--ff-mono);
+}
+
+html, body {
+  min-height: 100%;
+  font-family: var(--ff-body);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+a { color: var(--coral); }
+button { cursor: pointer; font-family: var(--ff-body); }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--card2); border-radius: 5px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border); }
+
+/* ── Shared component classes ── */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+}
+.section-title {
+  font-family: var(--ff-display);
+  font-size: 1.05rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.input {
+  background: var(--card2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 0.92rem;
+  width: 100%;
+}
+.input:focus { outline: none; border-color: var(--gold); }
+select.input option { background: var(--card2); }
+.btn {
+  background: var(--card2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 7px 14px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.btn:hover { border-color: var(--gold); color: var(--gold); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn-primary {
+  background: var(--gold-dim);
+  border-color: rgba(201, 162, 39, 0.45);
+  color: var(--gold);
+}
+.btn-primary:hover { border-color: var(--gold); }
+.btn-danger:hover { border-color: var(--coral); color: var(--coral); }
+.btn-sm { padding: 3px 9px; font-size: 0.82rem; }
+
+.tbl { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.tbl th {
+  text-align: left;
+  padding: 8px 10px;
+  color: var(--faint);
+  font-weight: 600;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.tbl td { padding: 8px 10px; border-bottom: 1px solid var(--card2); vertical-align: middle; }
+.tbl tbody tr:hover { background: var(--card2); }
+.td-num { font-family: var(--ff-mono); text-align: right; white-space: nowrap; }
+
+.chip {
+  display: inline-block;
+  border-radius: 4px;
+  padding: 1px 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.chip-green { background: var(--green-dim); color: var(--green); }
+.chip-coral { background: var(--coral-dim); color: var(--coral); }
+.chip-amber { background: var(--amber-dim); color: var(--amber); }
+.chip-gold  { background: var(--gold-dim);  color: var(--gold); }
+.chip-muted { background: var(--card2); color: var(--muted); }
