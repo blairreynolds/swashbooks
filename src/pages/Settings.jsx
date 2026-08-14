@@ -115,6 +115,16 @@ function EventYears() {
     refreshCore()
   }
 
+  async function remove(y) {
+    if (!confirm(`Delete event year "${y.label}"? Only possible if it has no transactions, bills, invoices, or donations.`)) return
+    const { error } = await supabase.from('event_years').delete().eq('id', y.id)
+    if (error) {
+      alert(error.message.includes('violates') || error.message.includes('foreign key')
+        ? `"${y.label}" still has records — delete or move them first.`
+        : error.message)
+    } else refreshCore()
+  }
+
   return (
     <div className="card flex flex-col gap-3">
       <div className="section-title">Event years</div>
@@ -126,8 +136,13 @@ function EventYears() {
               <td>{y.label}</td>
               <td className="font-mono text-xs">{y.event_date}</td>
               <td>{y.is_active ? <span className="chip chip-gold">active</span> : ''}</td>
-              <td className="text-right">
-                {!y.is_active && <button className="btn btn-sm" onClick={() => makeActive(y)}>make default</button>}
+              <td className="text-right whitespace-nowrap">
+                {!y.is_active && (
+                  <>
+                    <button className="btn btn-sm" onClick={() => makeActive(y)}>make default</button>{' '}
+                    <button className="btn btn-sm btn-danger" onClick={() => remove(y)}>del</button>
+                  </>
+                )}
               </td>
             </tr>
           ))}

@@ -37,6 +37,143 @@ function BvaRow({ name, budget, actual }) {
   )
 }
 
+const YEAR_COLORS = ['var(--gold)', 'var(--blue)', 'var(--purple)', 'var(--green)', 'var(--coral)']
+
+function YearOverYear() {
+  const { eventYears, categories } = useApp()
+  const [selected, setSelected] = useState(() => new Set(eventYears.map((y) => y.id)))
+  const [txns, setTxns] = useState([])
+  const [donations, setDonations] = useState([])
+
+  useEffect(() => {
+    setSelected(new Set(eventYears.map((y) => y.id)))
+  }, [eventYears])
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      const [tx, don] = await Promise.all([
+        supabase.from('transactions').select('event_year_id, category_id, amount, direction').eq('voided', false),
+        supabase.from('outbound_donations').select('event_year_id, amount'),
+      ])
+      if (cancelled) return
+      setTxns(tx.data ?? [])
+      setDonations(don.data ?? [])
+    }
+    load()
+    return () => { cancelled = true }
+  }, [eventYears])
+
+  if (eventYears.length < 2) return null
+
+  // Oldest → newest for display
+  const years = [...eventYears].reverse().filter((y) => selected.has(y.id))
+  const toggle = (id) => {
+    const next = new Set(selected)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    setSelected(next)
+  }
+
+  const sums = {}
+  for (const y of years) sums[y.id] = { income: 0, expenses: 0, charity: 0, byCat: {} }
+  for (const t of txns) {
+    const s = sums[t.event_year_id]
+    if (!s) continue
+    const amt = Number(t.amount)
+    if (t.direction === 'income') s.income += amt
+    else s.expenses += amt
+    s.byCat[t.category_id] = (s.byCat[t.category_id] ?? 0) + amt
+  }
+  for (const d of donations) {
+    if (sums[d.event_year_id]) sums[d.event_year_id].charity += Number(d.amount)
+  }
+
+  const colorOf = (yid) => YEAR_COLORS[[...eventYears].reverse().findIndex((y) => y.id === yid) % YEAR_COLORS.length]
+
+  const metrics = [
+    { key: 'income', label: 'Total income', value: (s) => s.income },
+    { key: 'expenses', label: 'Total expenses', value: (s) => s.expenses },
+    { key: 'net', label: 'Net', value: (s) => s.income - s.expenses },
+    { key: 'charity', label: 'Given to charity', value: (s) => s.charity },
+  ]
+  const maxAbs = Math.max(1, ...metrics.flatMap((m) => years.map((y) => Math.abs(m.value(sums[y.id])))))
+
+  const catRows = (type) =>
+    categories
+      .filter((c) => c.type === type && !c.archived)
+      .map((c) => ({ cat: c, vals: years.map((y) => sums[y.id].byCat[c.id] ?? 0) }))
+      .filter((r) => r.vals.some((v) => v > 0))
+
+  const expCats = catRows('expense')
+  const incCats = catRows('income')
+
+  return (
+    <div className="card">
+      <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+        <div className="section-title">Year over year</div>
+        <div className="flex gap-3 flex-wrap">
+          {[...eventYears].reverse().map((y) => (
+            <label key={y.id} className="flex items-center gap-1.5 text-sm text-muted cursor-pointer">
+              <input type="checkbox" checked={selected.has(y.id)} onChange={() => toggle(y.id)} />
+              <span style={{ color: colorOf(y.id) }}>■</span> {y.label}
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-x-8 gap-y-4 mb-5">
+        {metrics.map((m) => (
+          <div key={m.key}>
+            <div className="text-faint text-xs uppercase tracking-[0.08em] font-semibold mb-1.5">{m.label}</div>
+            {years.map((y) => {
+              const v = m.value(sums[y.id])
+              return (
+                <div key={y.id} className="flex items-center gap-2 py-0.5">
+                  <span className="w-20 shrink-0 text-xs text-muted truncate">{y.label}</span>
+                  <div className="flex-1 h-2 rounded bg-card2 overflow-hidden">
+                    <div className="h-full rounded" style={{ width: `${(Math.abs(v) / maxAbs) * 100}%`, background: v < 0 ? 'var(--coral)' : colorOf(y.id) }} />
+                  </div>
+                  <span className={`w-24 shrink-0 text-right font-mono text-xs ${v < 0 ? 'text-coral' : 'text-muted'}`}>{money(v)}</span>
+                </div>
+              )
+            })}
+          </div>
+        ))}
+      </div>
+
+      {(expCats.length > 0 || incCats.length > 0) && (
+        <div className="overflow-x-auto">
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>Category</th>
+                {years.map((y) => <th key={y.id} className="td-num" style={{ color: colorOf(y.id) }}>{y.label}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {expCats.length > 0 && <tr><td colSpan={years.length + 1} className="text-faint text-xs uppercase tracking-wider">Expenses</td></tr>}
+              {expCats.map(({ cat, vals }) => (
+                <tr key={cat.id}>
+                  <td className="text-muted">{cat.name}</td>
+                  {vals.map((v, i) => <td key={i} className="td-num">{v ? money(v) : '—'}</td>)}
+                </tr>
+              ))}
+              {incCats.length > 0 && <tr><td colSpan={years.length + 1} className="text-faint text-xs uppercase tracking-wider">Income</td></tr>}
+              {incCats.map(({ cat, vals }) => (
+                <tr key={cat.id}>
+                  <td className="text-muted">{cat.name}</td>
+                  {vals.map((v, i) => <td key={i} className="td-num">{v ? money(v) : '—'}</td>)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function Dashboard() {
   const { activeYear, categories, isAdmin } = useApp()
   const [txns, setTxns] = useState([])
@@ -161,6 +298,8 @@ export default function Dashboard() {
           ) : <div className="text-faint text-sm">No open invoices.</div>}
         </div>
       </div>
+
+      <YearOverYear />
     </>
   )
 }

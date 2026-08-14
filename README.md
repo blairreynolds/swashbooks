@@ -15,8 +15,11 @@ All Google-originated data (Sheets/Forms exports) arrives via manual CSV upload 
 - **Phase 2:** bills with pay→transaction flow, invoices (SB-YYYY-NNN numbering,
   line items, printable PDF, mark sent/paid→income transaction), outbound donations
   with auto-created Charitable Giving expense transactions. ✅
-- **Phase 3:** in-kind donations + acknowledgment letters, CSV importer with mapping
-  presets, year-over-year views.
+- **Phase 3:** in-kind donations + entity-status-aware acknowledgment letters, CSV
+  importer (column mapping, fuzzy category/contact matching, dry-run, duplicate
+  detection, named presets), year-over-year dashboard views. ✅
+  Presets need [`supabase/migrations/002_import_presets.sql`](supabase/migrations/002_import_presets.sql)
+  run in the SQL editor; everything else works without it.
 
 ## One-time setup
 

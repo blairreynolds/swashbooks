@@ -9,6 +9,7 @@ import Invoices from './pages/Invoices'
 import Donations from './pages/Donations'
 import Contacts from './pages/Contacts'
 import Budget from './pages/Budget'
+import Import from './pages/Import'
 import Settings from './pages/Settings'
 
 const TABS = [
@@ -19,6 +20,7 @@ const TABS = [
   { path: '/donations', label: 'Donations' },
   { path: '/contacts', label: 'Contacts' },
   { path: '/budget', label: 'Budget' },
+  { path: '/import', label: 'Import' },
   { path: '/settings', label: 'Settings', adminOnly: true },
 ]
 
@@ -112,6 +114,7 @@ function Shell() {
           <Route path="/donations" element={<Donations />} />
           <Route path="/contacts" element={<Contacts />} />
           <Route path="/budget" element={<Budget />} />
+          <Route path="/import" element={<Import />} />
           <Route path="/settings" element={isAdmin ? <Settings /> : <Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
