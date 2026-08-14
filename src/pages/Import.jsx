@@ -303,15 +303,25 @@ export default function Import() {
         )}
         {presets === null ? (
           <p className="text-faint text-xs">Mapping presets need migration <code className="font-mono">002_import_presets.sql</code> — run it in the Supabase SQL editor to enable saving.</p>
-        ) : presets.length > 0 && (
-          <div className="flex gap-2 items-center flex-wrap">
-            <span className="text-faint text-xs">Presets:</span>
-            {presets.map((p) => (
-              <span key={p.id} className="inline-flex items-center gap-0.5">
-                <button className="btn btn-sm" onClick={() => loadPreset(p)} title={`→ ${TARGETS[p.target].label}`}>{p.name}</button>
-                <button className="btn btn-sm btn-danger" onClick={() => deletePreset(p)} title="Delete preset">×</button>
-              </span>
-            ))}
+        ) : (
+          <div className="flex flex-col gap-1.5">
+            {presets.length > 0 && (
+              <div className="flex gap-2 items-center flex-wrap">
+                <span className="text-faint text-xs">Presets:</span>
+                {presets.map((p) => (
+                  <span key={p.id} className="inline-flex items-center gap-0.5">
+                    <button className="btn btn-sm" onClick={() => loadPreset(p)} title={`→ ${TARGETS[p.target].label}`}>{p.name}</button>
+                    <button className="btn btn-sm btn-danger" onClick={() => deletePreset(p)} title="Delete preset">×</button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <p className="text-faint text-xs">
+              A preset remembers which spreadsheet column goes to which field <em>by column position</em>,
+              so it's for repeat imports of the same sheet layout. If columns are added, removed, or
+              reordered in the source sheet, load the preset, fix the mapping, and save it again under
+              the same name.
+            </p>
           </div>
         )}
       </div>

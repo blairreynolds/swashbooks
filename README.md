@@ -20,6 +20,9 @@ All Google-originated data (Sheets/Forms exports) arrives via manual CSV upload 
   detection, named presets), year-over-year dashboard views. ✅
   Presets need [`supabase/migrations/002_import_presets.sql`](supabase/migrations/002_import_presets.sql)
   run in the SQL editor; everything else works without it.
+  **Preset gotcha:** a preset maps columns *by position* for one sheet layout — if the
+  source sheet's columns change or move, load the preset, fix the mapping, and re-save
+  it under the same name.
 
 ## One-time setup
 
