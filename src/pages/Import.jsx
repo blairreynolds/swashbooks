@@ -263,6 +263,13 @@ export default function Import() {
     setResult(null)
   }
 
+  async function deletePreset(p) {
+    if (!confirm(`Delete preset "${p.name}"?`)) return
+    const { error } = await supabase.from('import_presets').delete().eq('id', p.id)
+    if (error) alert(error.message)
+    else setPresets(presets.filter((x) => x.id !== p.id))
+  }
+
   if (!activeYear) return <div className="card text-faint text-sm">Create an event year first (Settings).</div>
 
   const fields = TARGETS[target].fields
@@ -300,7 +307,10 @@ export default function Import() {
           <div className="flex gap-2 items-center flex-wrap">
             <span className="text-faint text-xs">Presets:</span>
             {presets.map((p) => (
-              <button key={p.id} className="btn btn-sm" onClick={() => loadPreset(p)} title={`→ ${TARGETS[p.target].label}`}>{p.name}</button>
+              <span key={p.id} className="inline-flex items-center gap-0.5">
+                <button className="btn btn-sm" onClick={() => loadPreset(p)} title={`→ ${TARGETS[p.target].label}`}>{p.name}</button>
+                <button className="btn btn-sm btn-danger" onClick={() => deletePreset(p)} title="Delete preset">×</button>
+              </span>
             ))}
           </div>
         )}
