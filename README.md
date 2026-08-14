@@ -9,11 +9,12 @@ All Google-originated data (Sheets/Forms exports) arrives via manual CSV upload 
 
 ## Status
 
-- **Phase 1 (this build):** auth + roles, event years, categories, contacts, transactions
+- **Phase 1:** auth + roles, event years, categories, contacts, transactions
   with receipt upload, budgets (with copy-from-previous-year), dashboard with
   budget-vs-actual. ✅
-- **Phase 2 (next):** bills with pay→transaction flow, invoices with PDF + line items,
-  outbound donations. The database schema for these already exists.
+- **Phase 2:** bills with pay→transaction flow, invoices (SB-YYYY-NNN numbering,
+  line items, printable PDF, mark sent/paid→income transaction), outbound donations
+  with auto-created Charitable Giving expense transactions. ✅
 - **Phase 3:** in-kind donations + acknowledgment letters, CSV importer with mapping
   presets, year-over-year views.
 

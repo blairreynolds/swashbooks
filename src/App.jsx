@@ -4,6 +4,9 @@ import { AppProvider, useApp } from './lib/AppContext'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Transactions from './pages/Transactions'
+import Bills from './pages/Bills'
+import Invoices from './pages/Invoices'
+import Donations from './pages/Donations'
 import Contacts from './pages/Contacts'
 import Budget from './pages/Budget'
 import Settings from './pages/Settings'
@@ -11,6 +14,9 @@ import Settings from './pages/Settings'
 const TABS = [
   { path: '/', label: 'Dashboard', end: true },
   { path: '/transactions', label: 'Transactions' },
+  { path: '/bills', label: 'Bills' },
+  { path: '/invoices', label: 'Invoices' },
+  { path: '/donations', label: 'Donations' },
   { path: '/contacts', label: 'Contacts' },
   { path: '/budget', label: 'Budget' },
   { path: '/settings', label: 'Settings', adminOnly: true },
@@ -101,6 +107,9 @@ function Shell() {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/transactions" element={<Transactions />} />
+          <Route path="/bills" element={<Bills />} />
+          <Route path="/invoices" element={<Invoices />} />
+          <Route path="/donations" element={<Donations />} />
           <Route path="/contacts" element={<Contacts />} />
           <Route path="/budget" element={<Budget />} />
           <Route path="/settings" element={isAdmin ? <Settings /> : <Navigate to="/" replace />} />

@@ -140,7 +140,7 @@ export default function Dashboard() {
                 ))}
               </tbody>
             </table>
-          ) : <div className="text-faint text-sm">Nothing outstanding. (Bills arrive in Phase 2.)</div>}
+          ) : <div className="text-faint text-sm">Nothing outstanding.</div>}
         </div>
         <div className="card">
           <div className="section-title mb-3">Open Invoices</div>
@@ -158,7 +158,7 @@ export default function Dashboard() {
                 ))}
               </tbody>
             </table>
-          ) : <div className="text-faint text-sm">No open invoices. (Invoices arrive in Phase 2.)</div>}
+          ) : <div className="text-faint text-sm">No open invoices.</div>}
         </div>
       </div>
     </>
