@@ -188,9 +188,15 @@ export default function Transactions() {
   }
 
   async function openReceipt(path) {
+    // Open the window synchronously so popup blockers see a user gesture,
+    // then point it at the signed URL once it resolves.
+    const win = window.open('', '_blank')
     try {
-      window.open(await signedUrl(path), '_blank')
+      const url = await signedUrl(path)
+      if (win) win.location = url
+      else window.open(url, '_blank')
     } catch (e) {
+      if (win) win.close()
       alert(e.message)
     }
   }
