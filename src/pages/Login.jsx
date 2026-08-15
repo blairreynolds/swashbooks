@@ -21,7 +21,13 @@ export default function Login() {
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
-          options: { data: { display_name: name } },
+          options: {
+            data: { display_name: name },
+            // Land confirmation-email redirects back on this app (incl. the
+            // /swashbooks/ base path on GitHub Pages) instead of the Supabase
+            // project's Site URL default. Must be in the auth Redirect URLs allowlist.
+            emailRedirectTo: window.location.origin + window.location.pathname,
+          },
         })
         if (error) throw error
         if (!data.session) setMsg({ ok: true, text: 'Account created. Check your email to confirm, then sign in.' })
