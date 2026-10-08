@@ -1,0 +1,48 @@
+name: Supabase keep-alive
+
+# Free-tier Supabase projects pause after ~7 days without activity, which takes
+# the whole site down. A daily read through the REST API counts as activity.
+# A failed run means the project is unreachable (paused or down) — GitHub emails
+# the repo owner, and the fix is Restore in the Supabase dashboard.
+
+on:
+  schedule:
+    - cron: '17 13 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Query the database
+        env:
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          code=$(curl -sS -o body.txt -w '%{http_code}' --retry 3 --retry-delay 20 \
+            "$SUPABASE_URL/rest/v1/event_years?select=id&limit=1" \
+            -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $SUPABASE_ANON_KEY") || code=000
+          echo "HTTP $code"
+          if [ "$code" != "200" ]; then
+            head -c 300 body.txt 2>/dev/null; echo
+            echo "::error::Supabase did not answer (HTTP $code) — the project may be paused. Restore it in the Supabase dashboard."
+            exit 1
+          fi
+
+      # GitHub disables scheduled workflows in public repos after 60 days without
+      # a commit, which would silently stop this ping. Commit only when stale.
+      - uses: actions/checkout@v4
+      - name: Keep the schedule enabled
+        run: |
+          last=$(git log -1 --format=%ct)
+          age_days=$(( ($(date +%s) - last) / 86400 ))
+          echo "Last commit was $age_days days ago"
+          if [ "$age_days" -ge 50 ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit --allow-empty -m "Keep scheduled Supabase keep-alive enabled [skip ci]"
+            git push
+          fi
