@@ -9,6 +9,7 @@ import Invoices from './pages/Invoices'
 import Donations from './pages/Donations'
 import Contacts from './pages/Contacts'
 import Budget from './pages/Budget'
+import Planner from './pages/Planner'
 import Import from './pages/Import'
 import Settings from './pages/Settings'
 
@@ -20,6 +21,7 @@ const TABS = [
   { path: '/donations', label: 'Donations' },
   { path: '/contacts', label: 'Contacts' },
   { path: '/budget', label: 'Budget' },
+  { path: '/planner', label: 'Planner' },
   { path: '/import', label: 'Import' },
   { path: '/settings', label: 'Settings', adminOnly: true },
 ]
@@ -68,7 +70,7 @@ function Shell() {
   return (
     <div className="min-h-screen flex flex-col">
       <header
-        className="sticky top-0 z-40 flex items-center justify-between px-6 h-14"
+        className="sticky top-0 z-40 flex items-center justify-between px-6 h-14 print:hidden"
         style={{ background: 'var(--card)', borderBottom: '1px solid var(--gold)', boxShadow: '0 1px 0 var(--gold-dim)' }}
       >
         <div className="flex items-baseline gap-3">
@@ -86,7 +88,7 @@ function Shell() {
         </div>
       </header>
 
-      <nav className="flex gap-1 px-6 pt-3 border-b border-bdr flex-wrap">
+      <nav className="flex gap-1 px-6 pt-3 border-b border-bdr flex-wrap print:hidden">
         {TABS.filter((t) => !t.adminOnly || isAdmin).map((t) => (
           <NavLink
             key={t.path}
@@ -114,6 +116,7 @@ function Shell() {
           <Route path="/donations" element={<Donations />} />
           <Route path="/contacts" element={<Contacts />} />
           <Route path="/budget" element={<Budget />} />
+          <Route path="/planner" element={<Planner />} />
           <Route path="/import" element={<Import />} />
           <Route path="/settings" element={isAdmin ? <Settings /> : <Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />

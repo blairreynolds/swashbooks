@@ -23,6 +23,13 @@ All Google-originated data (Sheets/Forms exports) arrives via manual CSV upload 
   **Preset gotcha:** a preset maps columns *by position* for one sheet layout — if the
   source sheet's columns change or move, load the preset, fix the mapping, and re-save
   it under the same name.
+- **Bar planner:** port of the standalone `event-planner/swashball-planner.html` — bars,
+  drink recipes, per-bar assignments, inventory, and outputs (Beam-Suntory order, shopping
+  list, distribution, bar sheets, menu brief), shared by the crew per event year. Needs
+  [`supabase/migrations/003_planner.sql`](supabase/migrations/003_planner.sql). A year's
+  plan starts from the default template, a copy of another year, or a JSON export from the
+  standalone tool. Edits auto-save per row; the calc engine (`src/lib/plannerCalc.js`) is a
+  verbatim port of the original's.
 
 ## One-time setup
 

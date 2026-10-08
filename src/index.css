@@ -59,6 +59,22 @@ button { cursor: pointer; font-family: var(--ff-body); }
 ::-webkit-scrollbar-thumb { background: var(--card2); border-radius: 5px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--border); }
 
+/* Printed pages (planner outputs, bar sheets): dark-on-white. Every component
+   reads these tokens, so overriding them here restyles the whole page. */
+@media print {
+  :root {
+    --bg: #fff;
+    --card: #fff;
+    --card2: #f3f3f3;
+    --border: #cfcfcf;
+    --text: #111;
+    --muted: #333;
+    --faint: #666;
+    --gold: #8a6a10;
+  }
+  .card { break-inside: avoid; }
+}
+
 /* ── Shared component classes ── */
 .card {
   background: var(--card);

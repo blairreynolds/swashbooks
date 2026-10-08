@@ -32,3 +32,5 @@ export function downloadCSV(filename, headers, rows) {
   a.click()
   URL.revokeObjectURL(a.href)
 }
+
+export const fmtInt = (n) => Math.round(n).toLocaleString()

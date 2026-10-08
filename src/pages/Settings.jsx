@@ -120,7 +120,7 @@ function EventYears() {
     const { error } = await supabase.from('event_years').delete().eq('id', y.id)
     if (error) {
       alert(error.message.includes('violates') || error.message.includes('foreign key')
-        ? `"${y.label}" still has records — delete or move them first.`
+        ? `"${y.label}" still has records — delete or move them first (a bar plan can be cleared in Planner → Setup).`
         : error.message)
     } else refreshCore()
   }
