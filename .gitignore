@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 
 .env
+
+# Sponsor pipeline handoff: seed/export contain real prospect data and notes; never publish
+sponsor-pipeline/

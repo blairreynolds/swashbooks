@@ -7,6 +7,7 @@ import Transactions from './pages/Transactions'
 import Bills from './pages/Bills'
 import Invoices from './pages/Invoices'
 import Donations from './pages/Donations'
+import Sponsors from './pages/Sponsors'
 import Contacts from './pages/Contacts'
 import Budget from './pages/Budget'
 import Planner from './pages/Planner'
@@ -19,6 +20,7 @@ const TABS = [
   { path: '/bills', label: 'Bills' },
   { path: '/invoices', label: 'Invoices' },
   { path: '/donations', label: 'Donations' },
+  { path: '/sponsors', label: 'Sponsors' },
   { path: '/contacts', label: 'Contacts' },
   { path: '/budget', label: 'Budget' },
   { path: '/planner', label: 'Planner' },
@@ -114,6 +116,7 @@ function Shell() {
           <Route path="/bills" element={<Bills />} />
           <Route path="/invoices" element={<Invoices />} />
           <Route path="/donations" element={<Donations />} />
+          <Route path="/sponsors" element={<Sponsors />} />
           <Route path="/contacts" element={<Contacts />} />
           <Route path="/budget" element={<Budget />} />
           <Route path="/planner" element={<Planner />} />

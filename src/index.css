@@ -152,3 +152,4 @@ select.input option { background: var(--card2); }
 .chip-amber { background: var(--amber-dim); color: var(--amber); }
 .chip-gold  { background: var(--gold-dim);  color: var(--gold); }
 .chip-muted { background: var(--card2); color: var(--muted); }
+.chip-blue  { background: rgba(59, 130, 246, 0.14); color: var(--blue); }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useApp } from '../lib/AppContext'
 import { money, fmtDate, todayISO } from '../lib/format'
@@ -342,7 +343,8 @@ function InKindTab() {
 
 export default function Donations() {
   const { activeYear } = useApp()
-  const [tab, setTab] = useState('given') // 'given' | 'inkind'
+  const [params] = useSearchParams()
+  const [tab, setTab] = useState(params.get('tab') === 'inkind' ? 'inkind' : 'given')
 
   if (!activeYear) return <div className="card text-faint text-sm">Create an event year first (Settings).</div>
 

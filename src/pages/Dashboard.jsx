@@ -181,18 +181,20 @@ export default function Dashboard() {
   const [donated, setDonated] = useState(0)
   const [openBills, setOpenBills] = useState([])
   const [openInvoices, setOpenInvoices] = useState([])
+  const [sponsors, setSponsors] = useState(null)
 
   useEffect(() => {
     if (!activeYear) return
     let cancelled = false
     async function load() {
       const yid = activeYear.id
-      const [tx, bg, don, bills, invs] = await Promise.all([
+      const [tx, bg, don, bills, invs, sp] = await Promise.all([
         supabase.from('transactions').select('category_id, amount, direction').eq('event_year_id', yid).eq('voided', false),
         supabase.from('budgets').select('category_id, amount').eq('event_year_id', yid),
         supabase.from('outbound_donations').select('amount').eq('event_year_id', yid),
         supabase.from('bills').select('id, amount, due_date, description, contacts(name)').eq('event_year_id', yid).eq('status', 'unpaid').order('due_date'),
         supabase.from('invoices').select('id, invoice_number, due_date, status, contacts(name), invoice_line_items(line_total)').eq('event_year_id', yid).in('status', ['draft', 'sent']).order('due_date'),
+        supabase.from('sponsor_prospects').select('status, cash_committed, transactions(amount, voided)').eq('event_year_id', yid),
       ])
       if (cancelled) return
       setTxns(tx.data ?? [])
@@ -200,6 +202,16 @@ export default function Dashboard() {
       setDonated((don.data ?? []).reduce((s, r) => s + Number(r.amount), 0))
       setOpenBills(bills.data ?? [])
       setOpenInvoices(invs.data ?? [])
+      // Before migration 005 the query errors; the tile just stays hidden.
+      if (sp.error || !sp.data?.length) setSponsors(null)
+      else {
+        const won = sp.data.filter((p) => p.status === 'committed' || p.status === 'received')
+        setSponsors({
+          committed: won.reduce((s, p) => s + (Number(p.cash_committed) || 0), 0),
+          received: sp.data.reduce((s, p) => s + (p.transactions && !p.transactions.voided ? Number(p.transactions.amount) : 0), 0),
+          sponsorsWon: won.length,
+        })
+      }
     }
     load()
     return () => { cancelled = true }
@@ -244,6 +256,29 @@ export default function Dashboard() {
         <StatCard label="Net" value={money(income - expenses)} tone={income - expenses >= 0 ? 'text-grn' : 'text-coral'} />
         <StatCard label="Donated to Charity" value={money(donated)} tone="text-gold" />
       </div>
+
+      {sponsors && (
+        <div className="card flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex-1 min-w-64">
+            <div className="text-faint text-xs uppercase tracking-[0.08em] font-semibold">Sponsorship cash</div>
+            <div className="mt-1 flex items-baseline gap-2 flex-wrap">
+              <span className="font-mono text-2xl text-grn">{money(sponsors.received)}</span>
+              <span className="text-muted text-sm">received of</span>
+              <span className="font-mono text-xl text-gold">{money(sponsors.committed)}</span>
+              <span className="text-muted text-sm">committed</span>
+            </div>
+            <div className="h-2 rounded bg-card2 overflow-hidden mt-2">
+              <div
+                className="h-full rounded"
+                style={{ width: `${Math.min(100, (sponsors.received / Math.max(sponsors.committed, sponsors.received, 1)) * 100)}%`, background: 'var(--green)' }}
+              />
+            </div>
+          </div>
+          <div className="text-sm text-muted">
+            {sponsors.sponsorsWon} committed or received · <Link to="/sponsors">Open the pipeline →</Link>
+          </div>
+        </div>
+      )}
 
       <div className="grid lg:grid-cols-2 gap-5">
         <div className="card">

@@ -30,6 +30,14 @@ All Google-originated data (Sheets/Forms exports) arrives via manual CSV upload 
   plan starts from the default template, a copy of another year, or a JSON export from the
   standalone tool. Edits auto-save per row; the calc engine (`src/lib/plannerCalc.js`) is a
   verbatim port of the original's.
+- **Budget lines:** crew can add and rename lines on the Budget tab; hiding stays admin-only.
+  Needs [`supabase/migrations/004_crew_budget_lines.sql`](supabase/migrations/004_crew_budget_lines.sql).
+- **Sponsors:** sponsor-prospect pipeline per event year (port of the standalone "Pitching
+  Machine"): stages, follow-ups, notes and automatic stage history. A sponsor becomes a donor
+  contact; cash received becomes a Sponsorships income transaction and product received an
+  in-kind donation (acknowledgment letters on Donations). Needs
+  [`supabase/migrations/005_sponsors.sql`](supabase/migrations/005_sponsors.sql). The 2027
+  seed data is kept out of this public repo on purpose.
 
 ## One-time setup
 
