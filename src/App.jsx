@@ -1,6 +1,7 @@
 import { Routes, Route, NavLink, Navigate } from 'react-router-dom'
 import { isConfigured, supabase } from './lib/supabase'
 import { AppProvider, useApp } from './lib/AppContext'
+import { TAB_ACCESS } from './lib/tabs'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Transactions from './pages/Transactions'
@@ -14,19 +15,18 @@ import Planner from './pages/Planner'
 import Import from './pages/Import'
 import Settings from './pages/Settings'
 
-const TABS = [
-  { path: '/', label: 'Dashboard', end: true },
-  { path: '/transactions', label: 'Transactions' },
-  { path: '/bills', label: 'Bills' },
-  { path: '/invoices', label: 'Invoices' },
-  { path: '/donations', label: 'Donations' },
-  { path: '/sponsors', label: 'Sponsors' },
-  { path: '/contacts', label: 'Contacts' },
-  { path: '/budget', label: 'Budget' },
-  { path: '/planner', label: 'Planner' },
-  { path: '/import', label: 'Import' },
-  { path: '/settings', label: 'Settings', adminOnly: true },
-]
+const PAGES = {
+  dashboard: Dashboard,
+  transactions: Transactions,
+  bills: Bills,
+  invoices: Invoices,
+  donations: Donations,
+  sponsors: Sponsors,
+  contacts: Contacts,
+  budget: Budget,
+  planner: Planner,
+  import: Import,
+}
 
 function NotConfigured() {
   return (
@@ -61,13 +61,39 @@ function YearSwitcher() {
   )
 }
 
-function Shell() {
-  const { session, profile, isAdmin } = useApp()
+function NoAccess() {
+  const { session } = useApp()
+  return (
+    <div className="card max-w-lg">
+      <div className="section-title mb-2">You're signed in — access pending</div>
+      <p className="text-muted text-sm">
+        Your account ({session.user.email}) is set up, but an admin still needs to choose which parts
+        of SwashBooks you'll use. Let them know you've signed up; once they've granted access, reload this page.
+      </p>
+    </div>
+  )
+}
 
-  if (session === undefined) {
+// Sends someone who opens a tab they can't use to their first permitted tab.
+function Guarded({ tab, children }) {
+  const { canSee } = useApp()
+  if (canSee(tab)) return children
+  const first = TAB_ACCESS.find((t) => canSee(t.key))
+  return first ? <Navigate to={first.path} replace /> : <NoAccess />
+}
+
+function Shell() {
+  const { session, profile, profileLoaded, isAdmin, canSee } = useApp()
+
+  if (session === undefined || (session && !profileLoaded)) {
     return <div className="min-h-screen flex items-center justify-center text-faint">Loading…</div>
   }
   if (!session) return <Login />
+
+  const tabs = [
+    ...TAB_ACCESS.filter((t) => canSee(t.key)),
+    ...(isAdmin ? [{ key: 'settings', label: 'Settings', path: '/settings' }] : []),
+  ]
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -91,11 +117,11 @@ function Shell() {
       </header>
 
       <nav className="flex gap-1 px-6 pt-3 border-b border-bdr flex-wrap print:hidden">
-        {TABS.filter((t) => !t.adminOnly || isAdmin).map((t) => (
+        {tabs.map((t) => (
           <NavLink
             key={t.path}
             to={t.path}
-            end={t.end}
+            end={t.path === '/'}
             className={({ isActive }) =>
               `px-4 py-2 rounded-t-md text-sm font-medium border border-b-0 transition-colors ${
                 isActive
@@ -111,16 +137,10 @@ function Shell() {
 
       <main className="flex-1 p-6 flex flex-col gap-5 max-w-7xl w-full mx-auto">
         <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/transactions" element={<Transactions />} />
-          <Route path="/bills" element={<Bills />} />
-          <Route path="/invoices" element={<Invoices />} />
-          <Route path="/donations" element={<Donations />} />
-          <Route path="/sponsors" element={<Sponsors />} />
-          <Route path="/contacts" element={<Contacts />} />
-          <Route path="/budget" element={<Budget />} />
-          <Route path="/planner" element={<Planner />} />
-          <Route path="/import" element={<Import />} />
+          {TAB_ACCESS.map(({ key, path }) => {
+            const Page = PAGES[key]
+            return <Route key={key} path={path} element={<Guarded tab={key}><Page /></Guarded>} />
+          })}
           <Route path="/settings" element={isAdmin ? <Settings /> : <Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

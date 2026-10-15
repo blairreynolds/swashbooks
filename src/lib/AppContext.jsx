@@ -10,6 +10,7 @@ export function useApp() {
 export function AppProvider({ children }) {
   const [session, setSession] = useState(undefined) // undefined = still loading
   const [profile, setProfile] = useState(null)
+  const [profileLoaded, setProfileLoaded] = useState(false)
   const [eventYears, setEventYears] = useState([])
   const [activeYearId, setActiveYearId] = useState(null)
   const [categories, setCategories] = useState([])
@@ -22,7 +23,11 @@ export function AppProvider({ children }) {
   }, [])
 
   const refreshCore = useCallback(async () => {
-    if (!session) return
+    if (!session) {
+      setProfile(null)
+      setProfileLoaded(false)
+      return
+    }
     const [{ data: prof }, { data: years }, { data: cats }, { data: sets }] = await Promise.all([
       supabase.from('profiles').select('*').eq('id', session.user.id).single(),
       supabase.from('event_years').select('*').order('event_date', { ascending: false }),
@@ -30,6 +35,7 @@ export function AppProvider({ children }) {
       supabase.from('settings').select('*').limit(1).maybeSingle(),
     ])
     setProfile(prof ?? null)
+    setProfileLoaded(true)
     setEventYears(years ?? [])
     setCategories(cats ?? [])
     setSettings(sets ?? null)
@@ -45,11 +51,21 @@ export function AppProvider({ children }) {
 
   const activeYear = eventYears.find((y) => y.id === activeYearId) ?? null
   const isAdmin = profile?.role === 'admin'
+  // Before migration 006 there is no tab list, and the database still lets all
+  // crew into everything; mirror that so nobody is locked out of the app.
+  const tabsEnforced = Array.isArray(profile?.tabs)
+  const canSee = useCallback(
+    (key) => isAdmin || !tabsEnforced || profile.tabs.includes(key),
+    [isAdmin, tabsEnforced, profile],
+  )
 
   const value = {
     session,
     profile,
+    profileLoaded,
     isAdmin,
+    canSee,
+    tabsEnforced,
     eventYears,
     activeYear,
     activeYearId,

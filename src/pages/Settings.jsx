@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase, uploadFile, signedUrl } from '../lib/supabase'
 import { useApp } from '../lib/AppContext'
 import { todayISO } from '../lib/format'
+import { TAB_ACCESS } from '../lib/tabs'
 
 function OrgSettings() {
   const { settings, refreshCore } = useApp()
@@ -221,9 +222,10 @@ function Categories() {
   )
 }
 
-function Users() {
-  const { profile } = useApp()
+function Crew() {
+  const { profile, tabsEnforced } = useApp()
   const [rows, setRows] = useState([])
+  const [msg, setMsg] = useState(null)
 
   async function load() {
     const { data } = await supabase.from('profiles').select('*').order('created_at')
@@ -231,39 +233,93 @@ function Users() {
   }
   useEffect(() => { load() }, [])
 
-  async function setRole(u, role) {
-    const { error } = await supabase.from('profiles').update({ role }).eq('id', u.id)
-    if (error) alert(error.message)
-    else load()
+  async function update(u, patch, okText) {
+    setMsg(null)
+    const { error } = await supabase.from('profiles').update(patch).eq('id', u.id)
+    if (error) setMsg({ ok: false, text: error.message })
+    else { setMsg({ ok: true, text: okText }); load() }
   }
+
+  const who = (u) => u.display_name || u.email
+  const toggle = (u, key) => {
+    const has = u.tabs.includes(key)
+    const tabs = has ? u.tabs.filter((t) => t !== key) : [...u.tabs, key]
+    update(u, { tabs }, `${who(u)}: ${has ? 'removed' : 'added'} ${TAB_ACCESS.find((t) => t.key === key).label}.`)
+  }
+
+  const waiting = rows.filter((u) => u.role !== 'admin' && tabsEnforced && !u.tabs?.length)
 
   return (
     <div className="card flex flex-col gap-3">
-      <div className="section-title">Crew</div>
-      <table className="tbl">
-        <thead><tr><th>Name</th><th>Email</th><th>Role</th></tr></thead>
-        <tbody>
-          {rows.map((u) => (
-            <tr key={u.id}>
-              <td>{u.display_name || '—'}</td>
-              <td className="text-muted">{u.email}</td>
-              <td>
-                {u.id === profile?.id ? (
-                  <span className="chip chip-gold">{u.role} (you)</span>
+      <div className="flex items-baseline justify-between gap-3 flex-wrap">
+        <div className="section-title">Crew &amp; access</div>
+        {msg && <span className={`text-sm ${msg.ok ? 'text-grn' : 'text-coral'}`}>{msg.text}</span>}
+      </div>
+      {!tabsEnforced && (
+        <div className="chip chip-amber self-start">
+          Tab access isn't switched on yet — run migration 006 in the Supabase SQL editor. Until then every crew member can use every tab.
+        </div>
+      )}
+      {waiting.length > 0 && (
+        <div className="chip chip-amber self-start">
+          {waiting.length} new {waiting.length === 1 ? 'person is' : 'people are'} waiting for access: {waiting.map(who).join(', ')}
+        </div>
+      )}
+      <div className="flex flex-col gap-2">
+        {rows.map((u) => {
+          const me = u.id === profile?.id
+          const admin = u.role === 'admin'
+          return (
+            <div key={u.id} className="rounded bg-card2 p-3 flex flex-col gap-2">
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="min-w-0 flex-1">
+                  <div className="font-semibold">{u.display_name || '—'}{me && <span className="text-faint font-normal"> (you)</span>}</div>
+                  <div className="text-faint text-xs">{u.email}</div>
+                </div>
+                {me ? (
+                  <span className="chip chip-gold">{u.role}</span>
                 ) : (
-                  <select className="input !w-32" value={u.role} onChange={(e) => setRole(u, e.target.value)}>
+                  <select
+                    className="input !w-32"
+                    value={u.role}
+                    onChange={(e) => update(u, { role: e.target.value }, `${who(u)} is now ${e.target.value === 'admin' ? 'an admin' : 'a member'}.`)}
+                  >
                     <option value="member">member</option>
                     <option value="admin">admin</option>
                   </select>
                 )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+              </div>
+              {admin ? (
+                <div className="text-faint text-xs">Admins can use every tab, including Settings.</div>
+              ) : tabsEnforced && (
+                <div className="flex gap-1.5 flex-wrap items-center">
+                  {TAB_ACCESS.map((t) => {
+                    const on = u.tabs.includes(t.key)
+                    return (
+                      <button
+                        key={t.key}
+                        type="button"
+                        aria-pressed={on}
+                        className={`chip cursor-pointer border ${on ? 'chip-gold border-gold/40' : 'chip-muted border-transparent'}`}
+                        onClick={() => toggle(u, t.key)}
+                      >
+                        {on ? '✓ ' : ''}{t.label}
+                      </button>
+                    )
+                  })}
+                  <span className="flex gap-1 ml-1">
+                    <button type="button" className="btn btn-sm" onClick={() => update(u, { tabs: TAB_ACCESS.map((t) => t.key) }, `${who(u)} can use every tab.`)}>All</button>
+                    <button type="button" className="btn btn-sm" onClick={() => update(u, { tabs: [] }, `${who(u)} has no access.`)}>None</button>
+                  </span>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
       <p className="text-faint text-xs">
-        New crew members create their own account on the sign-in page; the first account automatically
-        becomes admin, everyone after starts as member.
+        New crew members create their own account on the sign-in page and start with no access until you
+        pick their tabs here. Access is enforced by the database, not just hidden in the menu.
       </p>
     </div>
   )
@@ -273,11 +329,11 @@ export default function Settings() {
   return (
     <>
       <OrgSettings />
+      <Crew />
       <div className="grid lg:grid-cols-2 gap-5 items-start">
         <EventYears />
-        <Users />
+        <Categories />
       </div>
-      <Categories />
     </>
   )
 }

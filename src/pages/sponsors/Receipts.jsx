@@ -12,7 +12,7 @@ const sameName = (a, b) => (a ?? '').trim().toLowerCase() === (b ?? '').trim().t
 // for cash, and an in-kind donation for product. Each money step creates the
 // record first, then links it and marks the prospect Received.
 export default function Receipts({ prospect, contacts, blocked, onChanged }) {
-  const { activeYear, categories, session } = useApp()
+  const { activeYear, categories, session, canSee } = useApp()
   const [mode, setMode] = useState(null) // 'link' | 'cash' | 'product'
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState(null)
@@ -102,8 +102,10 @@ export default function Receipts({ prospect, contacts, blocked, onChanged }) {
     })
   }
 
-  const tx = prospect.transactions
-  const gift = prospect.in_kind_donations
+  // The link on the prospect is the truth. The linked record itself may be
+  // hidden from crew without the Transactions or Donations tab.
+  const tx = prospect.transaction_id ? (prospect.transactions ?? {}) : null
+  const gift = prospect.in_kind_donation_id ? (prospect.in_kind_donations ?? {}) : null
 
   return (
     <div className="flex flex-col gap-3">
@@ -113,7 +115,7 @@ export default function Receipts({ prospect, contacts, blocked, onChanged }) {
       {/* Contact */}
       <div className="rounded bg-card2 p-3 flex flex-col gap-2 text-sm">
         {contact ? (
-          <div>Contact: <Link to="/contacts">{contact.name}</Link> <span className="chip chip-muted">{contact.type}</span></div>
+          <div>Contact: {canSee('contacts') ? <Link to="/contacts">{contact.name}</Link> : contact.name} <span className="chip chip-muted">{contact.type}</span></div>
         ) : mode === 'link' ? (
           <div className="flex gap-2 items-end flex-wrap">
             <Field label="Existing contact" className="flex-1 min-w-48">
@@ -140,7 +142,10 @@ export default function Receipts({ prospect, contacts, blocked, onChanged }) {
       {/* Cash */}
       <div className="rounded bg-card2 p-3 flex flex-col gap-2 text-sm">
         {tx ? (
-          <div>Cash received: <span className="font-mono text-grn">{money(tx.amount)}</span> on {fmtDate(tx.date)} · <Link to="/transactions">Transactions</Link></div>
+          <div>
+            Cash received{tx.amount != null && <>: <span className="font-mono text-grn">{money(tx.amount)}</span> on {fmtDate(tx.date)}</>} — recorded in the books
+            {canSee('transactions') && <> · <Link to="/transactions">Transactions</Link></>}
+          </div>
         ) : mode === 'cash' ? (
           <form onSubmit={recordCash} className="grid grid-cols-2 gap-2">
             <Field label="Amount ($)"><input className="input font-mono" type="number" min="0.01" step="0.01" value={cash.amount} onChange={(e) => setCash({ ...cash, amount: e.target.value })} required autoFocus /></Field>
@@ -169,8 +174,10 @@ export default function Receipts({ prospect, contacts, blocked, onChanged }) {
       <div className="rounded bg-card2 p-3 flex flex-col gap-2 text-sm">
         {gift ? (
           <div>
-            Product received: {gift.item_description} on {fmtDate(gift.date_received)} ·{' '}
-            <Link to="/donations?tab=inkind">Acknowledgment letter on Donations</Link>
+            Product received{gift.item_description && <>: {gift.item_description} on {fmtDate(gift.date_received)}</>} — logged as an in-kind donation
+            {canSee('donations')
+              ? <> · <Link to="/donations?tab=inkind">Acknowledgment letter on Donations</Link></>
+              : <span className="text-faint"> (the acknowledgment letter is printed from the Donations tab)</span>}
           </div>
         ) : mode === 'product' ? (
           <form onSubmit={logProduct} className="grid grid-cols-2 gap-2">

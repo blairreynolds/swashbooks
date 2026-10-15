@@ -38,6 +38,11 @@ All Google-originated data (Sheets/Forms exports) arrives via manual CSV upload 
   in-kind donation (acknowledgment letters on Donations). Needs
   [`supabase/migrations/005_sponsors.sql`](supabase/migrations/005_sponsors.sql). The 2027
   seed data is kept out of this public repo on purpose.
+- **Tab access:** each crew member has a list of tabs, set by an admin in Settings → Crew
+  & access, and enforced by the database (row-level security), not just the menu. Admins use
+  every tab; new signups start with none. Needs
+  [`supabase/migrations/006_tab_permissions.sql`](supabase/migrations/006_tab_permissions.sql);
+  members who existed before it keep every tab until trimmed.
 
 ## One-time setup
 
