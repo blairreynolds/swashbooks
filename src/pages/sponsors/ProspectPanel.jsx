@@ -71,7 +71,7 @@ export default function ProspectPanel({ prospect, activity, profiles, contacts, 
           .insert({ ...row, event_year_id: activeYear.id }).select('id').single()
         if (error) throw error
         setBase(form)
-        onSaved(data.id)
+        await onSaved(data.id)
       } else {
         // Only send what this person changed, so a crew member editing other
         // fields of the same prospect isn't overwritten.

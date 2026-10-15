@@ -261,7 +261,12 @@ export default function Sponsors() {
           profiles={profiles}
           contacts={contacts}
           onClose={() => setOpenId(null)}
-          onSaved={(id) => { load(); if (id) setOpenId(id) }}
+          onSaved={async (id) => {
+            // Reload first: switching the panel to a just-created prospect
+            // before it's in the list would close the panel until the reload lands.
+            await load()
+            if (id) setOpenId(id)
+          }}
         />
       )}
     </>
