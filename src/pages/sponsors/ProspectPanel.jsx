@@ -4,6 +4,16 @@ import { useApp } from '../../lib/AppContext'
 import { STAGES, CATEGORIES, TIERS, PRIORITIES, stageOf } from '../../lib/sponsors'
 import { Field, ConfirmButton } from '../planner/widgets'
 import Receipts from './Receipts'
+import PitchDraft from './PitchDraft'
+
+// Stages past Research that need someone responsible for them.
+const NEEDS_OWNER = new Set(['to_contact', 'contacted', 'talks', 'committed', 'received'])
+// What the database does to the follow-up date when the stage changes (migration 008).
+const STAGE_FOLLOW_UP = {
+  contacted: 'a week from today',
+  talks: '5 days from today',
+  committed: '3 weeks before the Ball, to confirm delivery',
+}
 
 const FIELDS = [
   'name', 'category', 'priority', 'status', 'tier', 'contact_name', 'contact_title', 'email', 'phone',
@@ -62,6 +72,10 @@ export default function ProspectPanel({ prospect, activity, profiles, contacts, 
   async function save(e) {
     e.preventDefault()
     if (!form.name.trim()) { setMsg({ ok: false, text: 'Add a brand or organization name first.' }); return }
+    if ((isNew || form.status !== base.status) && NEEDS_OWNER.has(form.status) && !form.owner_id) {
+      setMsg({ ok: false, text: `Pick who's on it before moving this to ${stageOf(form.status).label}.` })
+      return
+    }
     setBusy(true)
     setMsg(null)
     try {
@@ -153,6 +167,11 @@ export default function ProspectPanel({ prospect, activity, profiles, contacts, 
                 {STAGES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
               </select>
             </Field>
+            {form.status !== base.status && STAGE_FOLLOW_UP[form.status] && form.follow_up === base.follow_up && (
+              <p className="col-span-2 -mt-1 text-xs text-gold">
+                Saving sets the follow-up to {STAGE_FOLLOW_UP[form.status]} — or pick a date below to choose your own.
+              </p>
+            )}
             <Field label="Target tier">
               <select className="input" value={form.tier} onChange={set('tier')}>
                 <option value="">—</option>
@@ -214,6 +233,12 @@ export default function ProspectPanel({ prospect, activity, profiles, contacts, 
 
         {!isNew && (
           <div className="flex flex-col gap-4 px-5 pb-6">
+            <PitchDraft
+              prospect={prospect}
+              notes={activity.filter((a) => a.kind === 'note').map((a) => a.body)}
+              blocked={dirty}
+              onChanged={() => onSaved(prospect.id)}
+            />
             <Receipts prospect={prospect} contacts={contacts} blocked={dirty} onChanged={() => onSaved(prospect.id)} />
 
             <div className="section-title !text-sm">Notes &amp; history</div>

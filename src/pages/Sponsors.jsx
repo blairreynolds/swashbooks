@@ -9,6 +9,10 @@ import ProspectPanel from './sponsors/ProspectPanel'
 
 const SORT_KEY = 'swashbooks-sponsor-sort'
 const readSort = () => { try { return localStorage.getItem(SORT_KEY) || 'followUp' } catch { return 'followUp' } }
+const MINE_KEY = 'swashbooks-sponsor-mine'
+const readMine = () => { try { return localStorage.getItem(MINE_KEY) === '1' } catch { return false } }
+// Past Research and still unclaimed: flagged in the list.
+const NEEDS_OWNER = new Set(['to_contact', 'contacted', 'talks', 'committed'])
 
 function Tile({ label, value, alert, onClick, active }) {
   const Tag = onClick ? 'button' : 'div'
@@ -67,13 +71,13 @@ function StartYear({ onDone }) {
 }
 
 export default function Sponsors() {
-  const { activeYear } = useApp()
+  const { activeYear, session } = useApp()
   const [prospects, setProspects] = useState(null)
   const [missing, setMissing] = useState(false)
   const [loadErr, setLoadErr] = useState(null)
   const [profiles, setProfiles] = useState([])
   const [contacts, setContacts] = useState([])
-  const [view, setView] = useState({ stage: 'open', dueOnly: false, q: '', category: '', sort: readSort() })
+  const [view, setView] = useState({ stage: 'open', dueOnly: false, q: '', category: '', sort: readSort(), mine: readMine() })
   const [openId, setOpenId] = useState(null) // prospect id | 'new' | null
 
   const load = useCallback(async () => {
@@ -128,7 +132,9 @@ export default function Sponsors() {
   if (!prospects) return <div className="text-faint text-sm">Loading sponsors…</div>
 
   const stats = summarize(prospects)
-  const rows = filterProspects(prospects, view, latestNote)
+  const me = session.user.id
+  const rows = filterProspects(prospects, view, latestNote).filter((p) => !view.mine || p.owner_id === me)
+  const mineCount = prospects.filter((p) => p.owner_id === me).length
   const setV = (patch) => setView((v) => ({ ...v, ...patch }))
   const count = (id) => prospects.filter((p) => p.status === id).length
   const open = prospects.filter((p) => !CLOSED.has(p.status)).length
@@ -171,7 +177,7 @@ export default function Sponsors() {
         ))}
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-[2fr_1fr_1fr_auto] gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-[2fr_1fr_1fr_auto_auto] gap-3">
         <input className="input col-span-2 md:col-span-1" placeholder="Search name, contact, ask, notes…" value={view.q} onChange={(e) => setV({ q: e.target.value })} />
         <select className="input" value={view.category} onChange={(e) => setV({ category: e.target.value })}>
           <option value="">All categories</option>
@@ -185,7 +191,16 @@ export default function Sponsors() {
         >
           {SORTS.map((s) => <option key={s.id} value={s.id}>Sort: {s.label}</option>)}
         </select>
-        <button className="btn btn-primary col-span-2 md:col-span-1" onClick={() => setOpenId('new')}>+ Add prospect</button>
+        <button
+          type="button"
+          aria-pressed={view.mine}
+          className={`btn ${view.mine ? 'btn-primary' : ''}`}
+          title="Only prospects you own"
+          onClick={() => { setV({ mine: !view.mine }); try { localStorage.setItem(MINE_KEY, view.mine ? '0' : '1') } catch { /* per-browser convenience only */ } }}
+        >
+          Mine <span className="font-mono opacity-70">{mineCount}</span>
+        </button>
+        <button className="btn btn-primary" onClick={() => setOpenId('new')}>+ Add prospect</button>
       </div>
 
       {view.dueOnly && (
@@ -228,6 +243,7 @@ export default function Sponsors() {
                     <td className="text-muted text-sm max-w-72">
                       {p.next_step}
                       {p.owner_id && owners[p.owner_id] && <div className="text-faint text-xs">{owners[p.owner_id]}</div>}
+                      {!p.owner_id && NEEDS_OWNER.has(p.status) && <div className="text-amber text-xs">No owner yet</div>}
                     </td>
                     <td><FollowUp p={p} /></td>
                   </tr>
@@ -246,7 +262,12 @@ export default function Sponsors() {
                 </div>
                 <div className="text-faint text-xs">{p.category}{p.tier ? ` · ${p.tier} target` : ''}{p.contact_name ? ` · ${p.contact_name}` : ''}</div>
                 {p.next_step && <div className="text-muted text-sm">{p.next_step}</div>}
-                <FollowUp p={p} />
+                <div className="flex items-center justify-between gap-2">
+                  <FollowUp p={p} />
+                  {p.owner_id && owners[p.owner_id]
+                    ? <span className="text-faint text-xs">{owners[p.owner_id]}</span>
+                    : NEEDS_OWNER.has(p.status) && <span className="text-amber text-xs">No owner yet</span>}
+                </div>
               </button>
             ))}
           </div>
