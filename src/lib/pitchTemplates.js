@@ -49,11 +49,21 @@ function greeting(prospect) {
   return first ? `Hi ${first},` : `Hello ${prospect.name} team,`
 }
 
-const signOff = (senderName, ball) => `Thank you,\n${senderName || ''}\n${ball} crew`.replace('\n\n', '\n')
+const signOff = (senderName, ball, senderTitle) =>
+  `Thank you,\n${senderName || ''}\n${senderTitle ? `${senderTitle}, ${ball}` : `${ball} crew`}`.replace('\n\n', '\n')
 
-// prospect: sponsor_prospects row; notes: its note bodies; settings: org settings row;
-// attached: labels of the files going with the email.
-export function draftPitch({ prospect, notes = [], settings, eventDate, senderName, attached = [] }) {
+// Settings' talking points, one per line, run together as sentences.
+const talkingPoints = (settings) =>
+  (settings?.pitch_talking_points || '').split('\n').map((l) => l.trim()).filter(Boolean).join(' ') || null
+
+function introduce(senderName, senderTitle, ball) {
+  if (!senderName) return `I'm one of the volunteer crew behind ${ball}`
+  return senderTitle ? `I'm ${senderName}, ${senderTitle} for ${ball}` : `I'm ${senderName}, one of the volunteer crew behind ${ball}`
+}
+
+// prospect: sponsor_prospects row; notes: its note bodies; settings: org settings row
+// (its talking points go in every pitch); attached: labels of the files going with it.
+export function draftPitch({ prospect, notes = [], settings, eventDate, senderName, senderTitle, attached = [] }) {
   const ball = ballName(settings)
   const when = longDate(eventDate)
   const pitch = TIER_PITCH[prospect.tier] ?? DEFAULT_PITCH
@@ -61,32 +71,34 @@ export function draftPitch({ prospect, notes = [], settings, eventDate, senderNa
 
   const paragraphs = [
     greeting(prospect),
-    `I'm ${senderName || 'one of the volunteer crew'}${senderName ? ', one of the volunteer crew' : ''} behind ${ball}, a pirate-themed charity night in Milwaukie, Oregon${when ? `, on ${when}` : ''}. Around 700 guests come in full pirate attire for dancing, live music, food and drink, and the crew takes no proceeds: the money raised goes to local charitable organizations.`,
+    `${introduce(senderName, senderTitle, ball)}, a pirate-themed charity night in Milwaukie, Oregon${when ? `, on ${when}` : ''}. Around 700 guests come in full pirate attire for dancing, live music, food and drink, and the crew takes no proceeds: the money raised goes to local charitable organizations.`,
     returning ? 'You have supported the Ball before, and we would love to have you back.' : null,
     pitch.body + (prospect.ask ? ` What we have in mind: ${prospect.ask.replace(/\.?\s*$/, '.')}` : ''),
     settings?.entity_status === '501c3'
       ? `${ball} is a 501(c)(3) tax-exempt organization${settings.ein ? ` (EIN ${settings.ein})` : ''}.`
       : null,
+    talkingPoints(settings),
     attached.length
       ? `I've attached our ${listOf(attached.map(inSentence))}. Could we set up a quick call in the next week or two to talk through what recognition looks like at each level?`
       : 'Could we set up a quick call in the next week or two? I am happy to send our sponsor deck and talk through what recognition looks like at each level.',
-    signOff(senderName, ball),
+    signOff(senderName, ball, senderTitle),
   ].filter(Boolean)
 
   return { subject: pitch.subject(ball), body: paragraphs.join('\n\n') }
 }
 
 // A short nudge, sent as a reply in the thread of the last email.
-export function draftFollowUp({ prospect, settings, eventDate, senderName, lastSentAt, lastSubject, attached = [] }) {
+export function draftFollowUp({ prospect, settings, eventDate, senderName, senderTitle, lastSentAt, lastSubject, attached = [] }) {
   const ball = ballName(settings)
   const when = longDate(eventDate)
   const sentOn = lastSentAt ? new Date(lastSentAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric' }) : null
   const paragraphs = [
     greeting(prospect),
     `Just following up on my note${sentOn ? ` from ${sentOn}` : ''} about ${ball}${when ? ` on ${when}` : ''}. We would still love to have you aboard${prospect.ask ? `: ${prospect.ask.replace(/\.?\s*$/, '.')}` : '.'}`,
+    talkingPoints(settings),
     attached.length ? `I've attached our ${listOf(attached.map(inSentence))} in case it's useful.` : null,
     'Would a quick call in the next week or two work?',
-    signOff(senderName, ball),
+    signOff(senderName, ball, senderTitle),
   ].filter(Boolean)
   const subject = lastSubject ? (/^re:/i.test(lastSubject) ? lastSubject : `Re: ${lastSubject}`) : `Following up: ${ball}`
   return { subject, body: paragraphs.join('\n\n') }

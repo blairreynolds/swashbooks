@@ -278,6 +278,18 @@ function Crew() {
                   <div className="font-semibold">{u.display_name || '—'}{me && <span className="text-faint font-normal"> (you)</span>}</div>
                   <div className="text-faint text-xs">{u.email}</div>
                 </div>
+                <input
+                  key={u.pitch_title ?? ''}
+                  className="input !w-56"
+                  placeholder="Title in pitches"
+                  aria-label={`${who(u)}'s title in pitches`}
+                  title="How this person is introduced and signs off in sponsor pitches"
+                  defaultValue={u.pitch_title ?? ''}
+                  onBlur={(e) => {
+                    const v = e.target.value.trim()
+                    if (v !== (u.pitch_title ?? '')) update(u, { pitch_title: v || null }, `${who(u)}'s pitch title ${v ? 'saved' : 'cleared'}.`)
+                  }}
+                />
                 {me ? (
                   <span className="chip chip-gold">{u.role}</span>
                 ) : (
@@ -413,11 +425,52 @@ function SponsorEmail() {
   )
 }
 
+// What every pitch should work in, for templates and Claude drafts alike.
+function TalkingPoints() {
+  const { settings, refreshCore } = useApp()
+  const saved = settings?.pitch_talking_points ?? ''
+  const [text, setText] = useState(saved)
+  const [msg, setMsg] = useState(null)
+  useEffect(() => { setText(saved) }, [saved])
+
+  async function save() {
+    setMsg(null)
+    const { error } = await supabase.from('settings').update({ pitch_talking_points: text.trim() || null }).eq('id', settings.id)
+    setMsg(error ? { ok: false, text: error.message } : { ok: true, text: 'Saved.' })
+    if (!error) refreshCore()
+  }
+
+  if (!settings?.id) return null
+  return (
+    <div className="card flex flex-col gap-3">
+      <div className="flex items-baseline justify-between gap-3 flex-wrap">
+        <div className="section-title">Pitch talking points</div>
+        {msg && <span className={`text-sm ${msg.ok ? 'text-grn' : 'text-coral'}`}>{msg.text}</span>}
+      </div>
+      <textarea
+        className="input"
+        rows={3}
+        placeholder="One per line, e.g. We are currently in discussions with another sponsor about the Ambassador level."
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+      />
+      <div className="flex items-center gap-3 flex-wrap">
+        <button type="button" className="btn btn-primary" disabled={text === saved} onClick={save}>Save</button>
+        <span className="text-faint text-xs">
+          Every pitch includes these: the template adds them word for word, and Claude works them in. Keep them true
+          and current, and clear any that no longer apply. Each person's title in pitches is set under Crew &amp; access.
+        </span>
+      </div>
+    </div>
+  )
+}
+
 export default function Settings() {
   return (
     <>
       <OrgSettings />
       <SponsorEmail />
+      <TalkingPoints />
       <Crew />
       <div className="grid lg:grid-cols-2 gap-5 items-start">
         <EventYears />

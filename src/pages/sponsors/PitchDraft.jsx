@@ -16,8 +16,11 @@ const BEFORE_CONTACT = new Set(['research', 'to_contact', 'parked'])
 // mail: the Gmail connection (null until an admin connects one).
 export default function PitchDraft({ prospect, notes, emails = [], files = [], mail, blocked, onChanged }) {
   const { settings, activeYear, profile, session, isAdmin } = useApp()
-  const [draft, setDraft] = useState(null) // { subject, body, to, fileIds, inThread, generated }
+  // { subject, body, to, fileIds, inThread, source: 'template' | 'claude', generated }
+  const [draft, setDraft] = useState(null)
+  const [guidance, setGuidance] = useState('')
   const [busy, setBusy] = useState(false)
+  const [drafting, setDrafting] = useState(false)
   const [msg, setMsg] = useState(null)
 
   if (!PITCHABLE.has(prospect.status)) return null
@@ -25,32 +28,67 @@ export default function PitchDraft({ prospect, notes, emails = [], files = [], m
   const canSend = isAdmin && Boolean(mail?.email)
   const latest = [...emails].sort((a, b) => b.sent_at.localeCompare(a.sent_at))[0]
   const lastOut = emails.filter((e) => e.direction === 'out').sort((a, b) => b.sent_at.localeCompare(a.sent_at))[0]
+  const threadSubject = (() => {
+    const s = latest?.subject || lastOut?.subject || ''
+    return /^re:/i.test(s) ? s : `Re: ${s}`
+  })()
+  const labelsFor = (fileIds) => files.filter((f) => fileIds.includes(f.id)).map((f) => f.label)
 
   function write(fileIds, inThread) {
-    const attached = files.filter((f) => fileIds.includes(f.id)).map((f) => f.label)
-    const common = { prospect, settings, eventDate: activeYear?.event_date, senderName: profile?.display_name, attached }
+    const common = {
+      prospect, settings, eventDate: activeYear?.event_date,
+      senderName: profile?.display_name, senderTitle: profile?.pitch_title, attached: labelsFor(fileIds),
+    }
     return inThread && lastOut
       ? draftFollowUp({ ...common, lastSentAt: lastOut.sent_at, lastSubject: latest?.subject || lastOut.subject })
       : draftPitch({ ...common, notes })
   }
 
+  const defaults = () => ({
+    fileIds: canSend ? files.filter((f) => f.attach_by_default).map((f) => f.id) : [],
+    inThread: canSend && !firstPitch && Boolean(lastOut),
+  })
+
   function start() {
     setMsg(null)
-    const fileIds = canSend ? files.filter((f) => f.attach_by_default).map((f) => f.id) : []
-    const inThread = canSend && !firstPitch && Boolean(lastOut)
+    const { fileIds, inThread } = defaults()
     const d = write(fileIds, inThread)
-    setDraft({ ...d, to: prospect.email || '', fileIds, inThread, generated: d.body })
+    setDraft({ ...d, to: prospect.email || '', fileIds, inThread, source: 'template', generated: d.body })
   }
 
-  // Re-write the draft for new attachments or threading, unless it's been edited by hand.
+  // Claude writes it from the prospect's details, notes and earlier emails.
+  async function claudeDraft() {
+    const base = draft ?? { ...defaults(), to: prospect.email || '' }
+    if (draft && draft.body !== draft.generated && !confirm('Replace your edits with a new Claude draft?')) return
+    setDrafting(true)
+    setMsg(null)
+    try {
+      const d = await callMail('draft', {
+        prospect_id: prospect.id,
+        attached: labelsFor(base.fileIds),
+        follow_up: !firstPitch && Boolean(lastOut),
+        guidance,
+      })
+      const subject = base.inThread ? threadSubject : d.subject
+      setDraft({ ...base, subject, body: d.body, source: 'claude', generated: d.body })
+    } catch (e) {
+      setMsg({ ok: false, text: e.message })
+    } finally {
+      setDrafting(false)
+    }
+  }
+
+  // New attachments or threading: a template draft is re-written unless it's been
+  // edited by hand; a Claude draft keeps its text (redraft to change it).
   function rework(fileIds, inThread) {
+    const untouched = draft.source === 'template' && draft.body === draft.generated
     const d = write(fileIds, inThread)
-    const untouched = draft.body === draft.generated
+    const subject = inThread === draft.inThread ? draft.subject : draft.source === 'claude' ? (inThread ? threadSubject : draft.subject) : d.subject
     setDraft({
       ...draft,
       fileIds,
       inThread,
-      subject: inThread !== draft.inThread ? d.subject : draft.subject,
+      subject,
       body: untouched ? d.body : draft.body,
       generated: untouched ? d.body : draft.generated,
     })
@@ -129,16 +167,26 @@ export default function PitchDraft({ prospect, notes, emails = [], files = [], m
     <div className="flex flex-col gap-2">
       <div className="section-title !text-sm">{firstPitch ? 'Pitch' : 'Follow-up email'}</div>
       {!draft ? (
-        <div className="flex items-center gap-2 flex-wrap">
-          <button type="button" className="btn btn-sm btn-primary" disabled={blocked} onClick={start}>
-            {firstPitch ? 'Draft pitch email' : 'Draft follow-up email'}
-          </button>
-          {blocked && <span className="text-amber text-xs">Save your changes above first.</span>}
+        <div className="flex flex-col gap-2">
+          <input
+            className="input"
+            placeholder="Optional: steer Claude (e.g. mention our tiki bar, keep it short)"
+            aria-label="Direction for Claude"
+            value={guidance}
+            onChange={(e) => setGuidance(e.target.value)}
+            disabled={blocked || drafting}
+          />
+          <div className="flex items-center gap-2 flex-wrap">
+            <button type="button" className="btn btn-sm btn-primary" disabled={blocked || drafting} onClick={claudeDraft}>
+              {drafting ? 'Claude is writing…' : `Draft ${firstPitch ? 'pitch' : 'follow-up'} with Claude`}
+            </button>
+            <button type="button" className="btn btn-sm" disabled={blocked || drafting} onClick={start}>Use the template</button>
+            {blocked && <span className="text-amber text-xs">Save your changes above first.</span>}
+          </div>
           {!blocked && (
             <span className="text-faint text-xs">
-              {canSend
-                ? `Written from the tier, ask and notes. You review it, then send it from ${mail.email}.`
-                : 'Written from the tier, ask and notes. You review it and send it from your own email.'}
+              Claude writes from this prospect's details, notes and earlier emails, plus the talking points in Settings.
+              {canSend ? ` You review it, then send it from ${mail.email}.` : ' You review it and send it from your own email.'}
               {isAdmin && !mail?.email && <> <Link to="/settings">Connect Gmail</Link> to send from here.</>}
             </span>
           )}
@@ -164,6 +212,14 @@ export default function PitchDraft({ prospect, notes, emails = [], files = [], m
           <Field label="Message">
             <textarea className="input" rows={12} value={draft.body} onChange={(e) => setDraft({ ...draft, body: e.target.value })} />
           </Field>
+          <input
+            className="input"
+            placeholder="Direction for a redraft (optional)"
+            aria-label="Direction for Claude"
+            value={guidance}
+            onChange={(e) => setGuidance(e.target.value)}
+            disabled={drafting}
+          />
 
           {canSend && (
             <div className="flex flex-col gap-1">
@@ -187,6 +243,9 @@ export default function PitchDraft({ prospect, notes, emails = [], files = [], m
             ) : (
               <a className="btn btn-sm btn-primary no-underline" href={mailtoHref(prospect.email, draft.subject, draft.body)}>Open in my email</a>
             )}
+            <button type="button" className="btn btn-sm" disabled={drafting} onClick={claudeDraft} title="Uses the direction box and the ticked attachments">
+              {drafting ? 'Claude is writing…' : draft.source === 'claude' ? 'Redraft with Claude' : 'Draft with Claude'}
+            </button>
             <button type="button" className="btn btn-sm" onClick={copy}>Copy</button>
             <button type="button" className="btn btn-sm" onClick={() => setDraft(null)}>Discard</button>
             {canSend && (

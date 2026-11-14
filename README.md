@@ -124,6 +124,13 @@ The refresh token lands in Supabase Vault and is readable only by the function. 
 a different account (e.g. the Ball's own Workspace), repeat steps 1–4 there if it's a
 different domain, then press **Reconnect**.
 
+**Claude drafts:** "Draft with Claude" in the pitch composer has the same function call Claude
+(`claude-opus-5-5`, server-side refusal fallback on) with the prospect's details, notes, earlier
+emails, the sender's title and the Settings → Pitch talking points. It needs an
+`ANTHROPIC_API_KEY` Edge Function secret. Anyone with Sponsors access can draft; only admins send.
+Claude is told to state only the facts it's given (no dollar figures, benefits or tax claims
+unless Settings says 501(c)(3)); the template stays available as a fallback.
+
 Deploying the function: it runs with JWT verification **off**, because Google's callback
 and the cron job carry no Supabase session. The function checks every caller itself
 (admin session, or the cron secret kept in Vault).
