@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { supabase, uploadFile, signedUrl } from '../lib/supabase'
+import { callMail } from '../lib/sponsorMail'
 import { useApp } from '../lib/AppContext'
 import { todayISO } from '../lib/format'
 import { TAB_ACCESS } from '../lib/tabs'
@@ -325,10 +327,97 @@ function Crew() {
   )
 }
 
+const GMAIL_RESULT = {
+  connected: { ok: true, text: 'Gmail connected.' },
+  cancelled: { ok: false, text: 'Google sign-in was cancelled.' },
+  access_denied: { ok: false, text: 'Google sign-in was cancelled.' },
+  'error:no_refresh_token': { ok: false, text: "Google didn't grant a lasting connection. Press Connect Gmail again." },
+  'error:missing_permissions': { ok: false, text: "Both permissions are needed (send, and read the replies). Press Connect Gmail again and leave both ticked." },
+}
+
+const stamp = (iso) => (iso ? new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—')
+
+function SponsorEmail() {
+  const [params, setParams] = useSearchParams()
+  const [conn, setConn] = useState(undefined)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState(null)
+
+  async function load() {
+    const { data, error } = await supabase.from('mail_connection').select('*').eq('id', 1).maybeSingle()
+    setConn(error ? null : data)
+  }
+  useEffect(() => { load() }, [])
+
+  // Back from Google's sign-in page.
+  useEffect(() => {
+    const result = params.get('gmail')
+    if (!result) return
+    setMsg(GMAIL_RESULT[result] ?? { ok: false, text: `Couldn't connect Gmail (${result.replace(/^error:/, '')}).` })
+    params.delete('gmail')
+    setParams(params, { replace: true })
+  }, [params, setParams])
+
+  async function connect() {
+    setBusy(true)
+    setMsg(null)
+    try {
+      const { url } = await callMail('connect', { return_to: window.location.origin + window.location.pathname })
+      window.location.assign(url)
+    } catch (e) {
+      setMsg({ ok: false, text: e.message })
+      setBusy(false)
+    }
+  }
+
+  async function checkNow() {
+    setBusy(true)
+    setMsg(null)
+    try {
+      const r = await callMail('check')
+      setMsg({ ok: true, text: r.skipped ? 'Nothing to check yet.' : `Checked ${r.threads} ${r.threads === 1 ? 'thread' : 'threads'}: ${r.replies ?? 0} new ${r.replies === 1 ? 'reply' : 'replies'}.` })
+      load()
+    } catch (e) {
+      setMsg({ ok: false, text: e.message })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (conn === undefined) return null
+  return (
+    <div className="card flex flex-col gap-3">
+      <div className="flex items-baseline justify-between gap-3 flex-wrap">
+        <div className="section-title">Sponsor email</div>
+        {msg && <span className={`text-sm ${msg.ok ? 'text-grn' : 'text-coral'}`}>{msg.text}</span>}
+      </div>
+      {conn?.email ? (
+        <div className="text-sm flex flex-col gap-1">
+          <div>Sending as <span className="font-semibold text-gold">{conn.email}</span> <span className="text-faint">· connected {stamp(conn.connected_at)}</span></div>
+          <div className="text-muted">Last checked for replies {stamp(conn.last_check_at)}</div>
+          {conn.last_check_error && <div className="text-coral">Last check failed: {conn.last_check_error}</div>}
+        </div>
+      ) : (
+        <div className="text-muted text-sm">Not connected. Connect a Gmail or Google Workspace account to send pitches from the Sponsors page.</div>
+      )}
+      <div className="flex gap-2 flex-wrap">
+        <button type="button" className="btn btn-primary" disabled={busy} onClick={connect}>{conn?.email ? 'Reconnect or switch account' : 'Connect Gmail'}</button>
+        {conn?.email && <button type="button" className="btn" disabled={busy} onClick={checkNow}>Check for replies now</button>}
+      </div>
+      <p className="text-faint text-xs">
+        Only admins can send. Replies are checked every 10 minutes, and only in threads started from the Sponsors
+        page, so nothing else in this inbox is read. A reply flags the prospect, and if someone other than the
+        account holder owns it, they get it by email.
+      </p>
+    </div>
+  )
+}
+
 export default function Settings() {
   return (
     <>
       <OrgSettings />
+      <SponsorEmail />
       <Crew />
       <div className="grid lg:grid-cols-2 gap-5 items-start">
         <EventYears />

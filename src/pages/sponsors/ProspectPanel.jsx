@@ -5,6 +5,7 @@ import { STAGES, CATEGORIES, TIERS, PRIORITIES, stageOf } from '../../lib/sponso
 import { Field, ConfirmButton } from '../planner/widgets'
 import Receipts from './Receipts'
 import PitchDraft from './PitchDraft'
+import EmailLog from './EmailLog'
 
 // Stages past Research that need someone responsible for them.
 const NEEDS_OWNER = new Set(['to_contact', 'contacted', 'talks', 'committed', 'received'])
@@ -37,7 +38,7 @@ const when = (iso) => {
   catch { return iso }
 }
 
-export default function ProspectPanel({ prospect, activity, profiles, contacts, onClose, onSaved }) {
+export default function ProspectPanel({ prospect, activity, profiles, contacts, files, mail, onClose, onSaved }) {
   const { activeYear, isAdmin, session } = useApp()
   const isNew = !prospect
   const [base, setBase] = useState(() => toForm(prospect ?? DRAFT))
@@ -233,9 +234,13 @@ export default function ProspectPanel({ prospect, activity, profiles, contacts, 
 
         {!isNew && (
           <div className="flex flex-col gap-4 px-5 pb-6">
+            <EmailLog emails={prospect.sponsor_emails ?? []} mail={mail} onChanged={() => onSaved(prospect.id)} />
             <PitchDraft
               prospect={prospect}
               notes={activity.filter((a) => a.kind === 'note').map((a) => a.body)}
+              emails={prospect.sponsor_emails ?? []}
+              files={files}
+              mail={mail}
               blocked={dirty}
               onChanged={() => onSaved(prospect.id)}
             />

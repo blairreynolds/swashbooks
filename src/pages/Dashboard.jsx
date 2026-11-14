@@ -182,19 +182,21 @@ export default function Dashboard() {
   const [openBills, setOpenBills] = useState([])
   const [openInvoices, setOpenInvoices] = useState([])
   const [sponsors, setSponsors] = useState(null)
+  const [replies, setReplies] = useState(0)
 
   useEffect(() => {
     if (!activeYear) return
     let cancelled = false
     async function load() {
       const yid = activeYear.id
-      const [tx, bg, don, bills, invs, sp] = await Promise.all([
+      const [tx, bg, don, bills, invs, sp, rp] = await Promise.all([
         supabase.from('transactions').select('category_id, amount, direction').eq('event_year_id', yid).eq('voided', false),
         supabase.from('budgets').select('category_id, amount').eq('event_year_id', yid),
         supabase.from('outbound_donations').select('amount').eq('event_year_id', yid),
         supabase.from('bills').select('id, amount, due_date, description, contacts(name)').eq('event_year_id', yid).eq('status', 'unpaid').order('due_date'),
         supabase.from('invoices').select('id, invoice_number, due_date, status, contacts(name), invoice_line_items(line_total)').eq('event_year_id', yid).in('status', ['draft', 'sent']).order('due_date'),
         supabase.from('sponsor_prospects').select('status, cash_committed, transactions(amount, voided)').eq('event_year_id', yid),
+        supabase.from('sponsor_emails').select('id', { count: 'exact', head: true }).eq('direction', 'in').is('handled_at', null),
       ])
       if (cancelled) return
       setTxns(tx.data ?? [])
@@ -202,6 +204,7 @@ export default function Dashboard() {
       setDonated((don.data ?? []).reduce((s, r) => s + Number(r.amount), 0))
       setOpenBills(bills.data ?? [])
       setOpenInvoices(invs.data ?? [])
+      setReplies(rp.error ? 0 : rp.count ?? 0)
       // Before migration 005 the query errors; the tile just stays hidden.
       if (sp.error || !sp.data?.length) setSponsors(null)
       else {
@@ -275,7 +278,9 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="text-sm text-muted">
-            {sponsors.sponsorsWon} committed or received · <Link to="/sponsors">Open the pipeline →</Link>
+            {sponsors.sponsorsWon} committed or received
+            {replies > 0 && <> · <span className="text-coral font-semibold">{replies} {replies === 1 ? 'reply' : 'replies'} to handle</span></>}
+            {' · '}<Link to="/sponsors">Open the pipeline →</Link>
           </div>
         </div>
       )}

@@ -6,6 +6,8 @@ import {
   STAGES, CLOSED, CATEGORIES, SORTS, stageOf, priorityColor, followUpState, summarize, filterProspects,
 } from '../lib/sponsors'
 import ProspectPanel from './sponsors/ProspectPanel'
+import PitchFiles from './sponsors/PitchFiles'
+import { openReplies } from '../lib/sponsorMail'
 
 const SORT_KEY = 'swashbooks-sponsor-sort'
 const readSort = () => { try { return localStorage.getItem(SORT_KEY) || 'followUp' } catch { return 'followUp' } }
@@ -79,15 +81,21 @@ export default function Sponsors() {
   const [contacts, setContacts] = useState([])
   const [view, setView] = useState({ stage: 'open', dueOnly: false, q: '', category: '', sort: readSort(), mine: readMine() })
   const [openId, setOpenId] = useState(null) // prospect id | 'new' | null
+  const [files, setFiles] = useState([])
+  const [mail, setMail] = useState(null)
+  const [showFiles, setShowFiles] = useState(false)
+  const [repliesOnly, setRepliesOnly] = useState(false)
 
   const load = useCallback(async () => {
     if (!activeYear) return
-    const [p, prof, cts] = await Promise.all([
+    const [p, prof, cts, fl, mc] = await Promise.all([
       supabase.from('sponsor_prospects')
-        .select('*, transactions(id, amount, date), in_kind_donations(id, item_description, date_received), sponsor_activity(*)')
+        .select('*, transactions(id, amount, date), in_kind_donations(id, item_description, date_received), sponsor_activity(*), sponsor_emails(*)')
         .eq('event_year_id', activeYear.id),
       supabase.from('profiles').select('id, display_name, email').order('display_name'),
       supabase.from('contacts').select('id, name, type').order('name'),
+      supabase.from('sponsor_files').select('*').order('created_at'),
+      supabase.from('mail_connection').select('email, last_check_at, last_check_error').eq('id', 1).maybeSingle(),
     ])
     if (p.error) {
       if (/sponsor_|does not exist|schema cache/i.test(p.error.message)) setMissing(true)
@@ -99,6 +107,8 @@ export default function Sponsors() {
     setProspects(p.data)
     setProfiles(prof.data ?? [])
     setContacts(cts.data ?? [])
+    setFiles(fl.data ?? [])
+    setMail(mc.data ?? null)
   }, [activeYear?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { setProspects(null); load() }, [load])
@@ -133,7 +143,11 @@ export default function Sponsors() {
 
   const stats = summarize(prospects)
   const me = session.user.id
-  const rows = filterProspects(prospects, view, latestNote).filter((p) => !view.mine || p.owner_id === me)
+  const waiting = Object.fromEntries(prospects.map((p) => [p.id, openReplies(p.sponsor_emails).length]))
+  const replyCount = Object.values(waiting).filter(Boolean).length
+  const rows = filterProspects(prospects, view, latestNote)
+    .filter((p) => !view.mine || p.owner_id === me)
+    .filter((p) => !repliesOnly || waiting[p.id])
   const mineCount = prospects.filter((p) => p.owner_id === me).length
   const setV = (patch) => setView((v) => ({ ...v, ...patch }))
   const count = (id) => prospects.filter((p) => p.status === id).length
@@ -177,7 +191,19 @@ export default function Sponsors() {
         ))}
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-[2fr_1fr_1fr_auto_auto] gap-3">
+      {replyCount > 0 && (
+        <button
+          type="button"
+          className="card text-left flex items-center justify-between gap-3 flex-wrap"
+          style={{ borderColor: 'var(--coral)', background: 'var(--coral-dim)' }}
+          onClick={() => setRepliesOnly(!repliesOnly)}
+        >
+          <span><span className="font-semibold text-coral">{replyCount} {replyCount === 1 ? 'prospect has' : 'prospects have'} a reply to handle.</span> <span className="text-muted text-sm">Open one to read it, then mark it handled or answer it.</span></span>
+          <span className="btn btn-sm">{repliesOnly ? 'Show everyone' : 'Show only these'}</span>
+        </button>
+      )}
+
+      <div className="grid grid-cols-2 md:grid-cols-[2fr_1fr_1fr_auto_auto_auto] gap-3">
         <input className="input col-span-2 md:col-span-1" placeholder="Search name, contact, ask, notes…" value={view.q} onChange={(e) => setV({ q: e.target.value })} />
         <select className="input" value={view.category} onChange={(e) => setV({ category: e.target.value })}>
           <option value="">All categories</option>
@@ -200,8 +226,13 @@ export default function Sponsors() {
         >
           Mine <span className="font-mono opacity-70">{mineCount}</span>
         </button>
+        <button type="button" aria-pressed={showFiles} className={`btn ${showFiles ? 'btn-primary' : ''}`} onClick={() => setShowFiles(!showFiles)}>
+          Pitch files <span className="font-mono opacity-70">{files.length}</span>
+        </button>
         <button className="btn btn-primary" onClick={() => setOpenId('new')}>+ Add prospect</button>
       </div>
+
+      {showFiles && <PitchFiles files={files} onChanged={load} />}
 
       {view.dueOnly && (
         <div className="text-sm text-muted flex items-center gap-2">
@@ -239,7 +270,10 @@ export default function Sponsors() {
                       <div className={p.contact_name ? '' : 'text-faint'}>{p.contact_name || 'No contact yet'}</div>
                       <div className="text-faint text-xs">{p.contact_title}</div>
                     </td>
-                    <td><span className={`chip ${stageOf(p.status).chip}`}>{stageOf(p.status).label}</span></td>
+                    <td>
+                      <span className={`chip ${stageOf(p.status).chip}`}>{stageOf(p.status).label}</span>
+                      {waiting[p.id] > 0 && <div className="mt-1"><span className="chip chip-coral">Replied</span></div>}
+                    </td>
                     <td className="text-muted text-sm max-w-72">
                       {p.next_step}
                       {p.owner_id && owners[p.owner_id] && <div className="text-faint text-xs">{owners[p.owner_id]}</div>}
@@ -258,7 +292,10 @@ export default function Sponsors() {
               <button key={p.id} type="button" className="card text-left flex flex-col gap-1" onClick={() => setOpenId(p.id)}>
                 <div className="flex items-center justify-between gap-2">
                   <span className="flex items-center gap-2 font-semibold"><Dot priority={p.priority} />{p.name}</span>
-                  <span className={`chip ${stageOf(p.status).chip}`}>{stageOf(p.status).label}</span>
+                  <span className="flex gap-1">
+                    {waiting[p.id] > 0 && <span className="chip chip-coral">Replied</span>}
+                    <span className={`chip ${stageOf(p.status).chip}`}>{stageOf(p.status).label}</span>
+                  </span>
                 </div>
                 <div className="text-faint text-xs">{p.category}{p.tier ? ` · ${p.tier} target` : ''}{p.contact_name ? ` · ${p.contact_name}` : ''}</div>
                 {p.next_step && <div className="text-muted text-sm">{p.next_step}</div>}
@@ -281,6 +318,8 @@ export default function Sponsors() {
           activity={panelProspect?.sponsor_activity ?? []}
           profiles={profiles}
           contacts={contacts}
+          files={files}
+          mail={mail}
           onClose={() => setOpenId(null)}
           onSaved={async (id) => {
             // Reload first: switching the panel to a just-created prospect

@@ -91,3 +91,39 @@ Push this repo to GitHub, import it in Vercel, framework preset **Vite**, and ad
   short-lived signed URLs. Nothing is publicly accessible.
 - A **Charitable Giving** expense category is seeded beyond the spec's list — Phase 2's
   outbound-donation flow will post its linked expense transactions there.
+
+## Sponsor email (Gmail)
+
+Admins can send pitches from the Sponsors page through one connected Gmail or Google
+Workspace account, with files from the **Pitch files** library attached. The
+`sponsor-mail` Edge Function (`supabase/functions/sponsor-mail`) does the Gmail work:
+
+- **Send:** builds the email with attachments, sends it as the connected account, and logs it
+  on the prospect. A first pitch moves the prospect to Contacted.
+- **Replies:** a pg_cron job (migration 010) checks every 10 minutes. It reads **only** the
+  threads the Sponsors page started, so nothing else in the inbox is touched. New replies
+  are logged in the prospect's history and flagged on the Sponsors tab and the Dashboard.
+  When the prospect's owner isn't the account holder, the reply is also emailed to them.
+  Answering a reply, from the page or from Gmail, clears the flag.
+
+One-time setup, done in the Google account that will send:
+
+1. In [Google Cloud console](https://console.cloud.google.com/), create a project (e.g.
+   "SwashBooks mail") and enable the **Gmail API**.
+2. Set up the **OAuth consent screen** (Google Auth Platform → Branding/Audience) with
+   user type **Internal**. That limits it to the Workspace domain and skips Google's
+   app review.
+3. Create an OAuth **client ID** of type *Web application*, with this authorized redirect URI:
+   `https://fskgdjktsqowsfxswkwe.supabase.co/functions/v1/sponsor-mail`
+4. In Supabase → Edge Functions → **Secrets**, add `GOOGLE_CLIENT_ID` and
+   `GOOGLE_CLIENT_SECRET` from that client.
+5. In SwashBooks → Settings → **Sponsor email**, press **Connect Gmail** and approve both
+   permissions (send, and read).
+
+The refresh token lands in Supabase Vault and is readable only by the function. To move to
+a different account (e.g. the Ball's own Workspace), repeat steps 1–4 there if it's a
+different domain, then press **Reconnect**.
+
+Deploying the function: it runs with JWT verification **off**, because Google's callback
+and the cron job carry no Supabase session. The function checks every caller itself
+(admin session, or the cron secret kept in Vault).

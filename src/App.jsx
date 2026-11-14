@@ -1,7 +1,9 @@
+import { useEffect, useState } from 'react'
 import { Routes, Route, NavLink, Navigate } from 'react-router-dom'
 import { isConfigured, supabase } from './lib/supabase'
 import { AppProvider, useApp } from './lib/AppContext'
 import { TAB_ACCESS } from './lib/tabs'
+import { REPLIES_EVENT } from './lib/sponsorMail'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Transactions from './pages/Transactions'
@@ -82,8 +84,35 @@ function Guarded({ tab, children }) {
   return first ? <Navigate to={first.path} replace /> : <NoAccess />
 }
 
+// Sponsor replies nobody has handled yet, for the badge on the Sponsors tab.
+function useOpenReplies(enabled) {
+  const [count, setCount] = useState(0)
+  useEffect(() => {
+    if (!enabled) return
+    let live = true
+    const load = async () => {
+      const { count: n, error } = await supabase.from('sponsor_emails')
+        .select('id', { count: 'exact', head: true }).eq('direction', 'in').is('handled_at', null)
+      if (live) setCount(error ? 0 : n ?? 0)
+    }
+    load()
+    const onVisible = () => { if (document.visibilityState === 'visible') load() }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener(REPLIES_EVENT, load)
+    const timer = setInterval(load, 5 * 60e3)
+    return () => {
+      live = false
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener(REPLIES_EVENT, load)
+      clearInterval(timer)
+    }
+  }, [enabled])
+  return enabled ? count : 0
+}
+
 function Shell() {
   const { session, profile, profileLoaded, isAdmin, canSee } = useApp()
+  const replies = useOpenReplies(Boolean(session) && profileLoaded && canSee('sponsors'))
 
   if (session === undefined || (session && !profileLoaded)) {
     return <div className="min-h-screen flex items-center justify-center text-faint">Loading…</div>
@@ -131,6 +160,9 @@ function Shell() {
             }
           >
             {t.label}
+            {t.key === 'sponsors' && replies > 0 && (
+              <span className="chip chip-coral ml-1.5 !py-0" title={`${replies} sponsor ${replies === 1 ? 'reply' : 'replies'} to handle`}>{replies}</span>
+            )}
           </NavLink>
         ))}
       </nav>
