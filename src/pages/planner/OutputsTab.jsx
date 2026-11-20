@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { SOURCES, TAPS, calcShoppingList, calcByBar, calcServingsAtBar, findInventory } from '../../lib/plannerCalc'
+import { SOURCES, TAP_EQUIPMENT, hasTaps, calcShoppingList, calcByBar, calcServingsAtBar, findInventory } from '../../lib/plannerCalc'
 import { SourceBadge } from './widgets'
 import { fmtInt } from '../../lib/format'
 
@@ -17,7 +17,7 @@ const byOzDesc = (a, b) => b.oz - a.oz
 
 // Every tap on a bar, in order, with the keg's name (or null if it's empty).
 function tapList(state, bar) {
-  if (!bar.equipment.includes(TAPS) || !bar.tapCount) return []
+  if (!hasTaps(bar.equipment) || !bar.tapCount) return []
   return Array.from({ length: bar.tapCount }, (_, i) => {
     const t = bar.taps.find((x) => x.tap === i + 1)
     return { tap: i + 1, name: state.inventory.find((it) => it.id === t?.inventoryId)?.name || null }
@@ -177,7 +177,7 @@ function BarSheets({ state }) {
         </div>
         {bar.equipment.length > 0 && (
           <div className="flex gap-1.5 flex-wrap mb-3">
-            {bar.equipment.map((e) => <span key={e} className="chip chip-muted">{e}{e === TAPS ? ` (${bar.tapCount})` : ''}</span>)}
+            {bar.equipment.map((e) => <span key={e} className="chip chip-muted">{e}{TAP_EQUIPMENT.includes(e) ? ` (${bar.tapCount})` : ''}</span>)}
           </div>
         )}
         <TapLines taps={tapList(state, bar)} />

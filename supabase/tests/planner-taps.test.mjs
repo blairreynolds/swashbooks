@@ -103,6 +103,8 @@ r = await as(PLANNER, `insert into planner_taps (bar_id, tap_number, inventory_i
 check('Putting a keg on a second tap is refused', !r.ok, r.error)
 r = await as(PLANNER, `insert into planner_taps (bar_id, tap_number) values ($1, 2)`, [deckId])
 check('Several empty taps are fine', r.ok, r.error)
+const kegeratorOnly = { ...s27, bars: [{ id: 'k', name: 'Pot', equipment: ['Kegerator'], tapCount: 1, taps: [{ tap: 1, inventoryId: ids.mix }] }] }
+check('A kegerator counts as taps', tapsByKeg(kegeratorOnly)[ids.mix]?.[0]?.barName === 'Pot')
 check('isKeg spots "kegs" and "1/6 bbl kegs", not bottles',
   s27.inventory.filter(isKeg).map((i) => i.name).sort().join() === 'Breakside IPA,Cider')
 

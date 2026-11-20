@@ -1,4 +1,4 @@
-import { EQUIPMENT_OPTIONS, TAPS, VESSELS, calcServingsAtBar, isKeg, tapsByKeg } from '../../lib/plannerCalc'
+import { EQUIPMENT_OPTIONS, TAP_EQUIPMENT, hasTaps, tapsLabel, VESSELS, calcServingsAtBar, isKeg, tapsByKeg } from '../../lib/plannerCalc'
 import { Field, NumField, ConfirmButton, JumpChips } from './widgets'
 
 const MAX_TAPS = 30
@@ -29,7 +29,7 @@ function TapsEditor({ bar, taps, kegs, usage, store }) {
   return (
     <div className="flex flex-col gap-2 rounded bg-card2 p-3">
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-faint text-xs">Taps</span>
+        <span className="text-faint text-xs">{tapsLabel(bar.equipment)}</span>
         <button type="button" className="btn btn-sm" disabled={count <= 0} onClick={() => setCount(count - 1)} aria-label="One fewer tap">−</button>
         <span className="font-mono w-6 text-center">{count}</span>
         <button type="button" className="btn btn-sm" disabled={count >= MAX_TAPS} onClick={() => setCount(count + 1)} aria-label="One more tap">+</button>
@@ -109,15 +109,17 @@ function BarCard({ bar, assignments, taps, kegs, usage, drinks, state, store }) 
 
   function toggleEquipment(eq) {
     const on = equipment.includes(eq)
-    if (eq === TAPS && on) {
-      // Switching taps off clears the bar's taps and the kegs on them.
+    const without = equipment.filter((e) => e !== eq)
+    // Taps and a kegerator (a portable tap) share one tap count and keg list.
+    if (TAP_EQUIPMENT.includes(eq) && on && !hasTaps(without)) {
+      // Switching off the bar's last tap equipment clears its taps and the kegs on them.
       const tapped = taps.filter((t) => t.inventory_id)
-      if (tapped.length && !confirm(`Turn off taps? This takes the ${tapped.length} ${tapped.length === 1 ? 'keg' : 'kegs'} off this bar's taps.`)) return
+      if (tapped.length && !confirm(`Turn off ${eq.toLowerCase()}? This takes the ${tapped.length} ${tapped.length === 1 ? 'keg' : 'kegs'} off this bar's taps.`)) return
       taps.forEach((t) => store.remove('planner_taps', t.id))
-      set({ equipment: equipment.filter((e) => e !== eq), tap_count: 0 })
+      set({ equipment: without, tap_count: 0 })
       return
     }
-    if (eq === TAPS) {
+    if (TAP_EQUIPMENT.includes(eq) && !on) {
       set({ equipment: [...equipment, eq], tap_count: Math.max(1, Number(bar.tap_count) || 0) })
       return
     }
@@ -186,14 +188,14 @@ function BarCard({ bar, assignments, taps, kegs, usage, drinks, state, store }) 
                 className={`chip cursor-pointer border ${on ? 'chip-gold border-gold/40' : 'chip-muted border-transparent'}`}
                 onClick={() => toggleEquipment(eq)}
               >
-                {on ? '✓ ' : ''}{eq}{eq === TAPS && on ? ` (${Number(bar.tap_count) || 0})` : ''}
+                {on ? '✓ ' : ''}{eq}{TAP_EQUIPMENT.includes(eq) && on ? ` (${Number(bar.tap_count) || 0})` : ''}
               </button>
             )
           })}
         </div>
       </div>
 
-      {equipment.includes(TAPS) && <TapsEditor bar={bar} taps={taps} kegs={kegs} usage={usage} store={store} />}
+      {hasTaps(equipment) && <TapsEditor bar={bar} taps={taps} kegs={kegs} usage={usage} store={store} />}
 
       <div className="flex flex-col gap-1.5">
         <div className="text-faint text-xs">Drink assignments</div>

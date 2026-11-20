@@ -28,8 +28,16 @@ export const SOURCES = {
 export const DRINK_TYPES = { cocktail: 'Cocktail', beer: 'Beer/Wine', na: 'Non-Alcoholic' }
 
 export const TAPS = 'Taps'
+export const KEGERATOR = 'Kegerator' // a portable tap: same tap count and kegs as Taps
+export const TAP_EQUIPMENT = [KEGERATOR, TAPS]
+export const hasTaps = (equipment) => (equipment ?? []).some((e) => TAP_EQUIPMENT.includes(e))
+// "Taps", "Kegerator", or "Taps & kegerator" for whichever the bar has.
+export const tapsLabel = (equipment) => {
+  const on = TAP_EQUIPMENT.filter((e) => (equipment ?? []).includes(e))
+  return on.length === 2 ? 'Taps & kegerator' : (on[0] ?? TAPS)
+}
 export const EQUIPMENT_OPTIONS = [
-  'Kegerator', TAPS, 'Slushee Machine', 'Air Pot', 'Portable Bar',
+  KEGERATOR, TAPS, 'Slushee Machine', 'Air Pot', 'Portable Bar',
   'Ice Bin/Cooler', 'Dump Bucket', "Stor'n Pour Station", 'Speed Rail', 'POS Terminal',
 ]
 
@@ -40,7 +48,7 @@ export const isKeg = (item) => /\bkegs?\b/i.test(item?.unit ?? '')
 export function tapsByKeg(state) {
   const out = {}
   for (const bar of state.bars) {
-    if (!bar.equipment.includes(TAPS)) continue
+    if (!hasTaps(bar.equipment)) continue
     for (const t of bar.taps ?? []) {
       if (!t.inventoryId || t.tap > bar.tapCount) continue
       ;(out[t.inventoryId] ??= []).push({ barId: bar.id, barName: bar.name, tap: t.tap })
