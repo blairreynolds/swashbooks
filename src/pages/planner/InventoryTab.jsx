@@ -7,13 +7,13 @@ import { NumField, SourceSelect } from './widgets'
 import { fmtInt } from '../../lib/format'
 
 function NeededCells({ item, neededOz, bottleOz, onTaps }) {
-  // A keg's need is one per tap it's on.
+  // A keg row is one keg on (at most) one tap: needed once it's on a tap.
   if (isKeg(item)) {
     if (!onTaps) return <><td className="td-num text-faint" title="Not on any tap">—</td><td className="td-num text-faint">—</td></>
-    const short = Math.max(0, onTaps - (Number(item.in_hand) || 0))
+    const short = Math.max(0, 1 - (Number(item.in_hand) || 0))
     return (
       <>
-        <td className="td-num text-muted" title="One keg per tap">{onTaps}</td>
+        <td className="td-num text-muted" title="One keg, on one tap">1</td>
         <td className={`td-num font-semibold ${short > 0 ? 'text-gold' : 'text-grn'}`}>{short > 0 ? `+${short}` : '✓'}</td>
       </>
     )
@@ -77,11 +77,17 @@ export default function InventoryTab({ store, state }) {
     })
   }
 
+  // A second keg of the same beer is its own row, so it can go on its own tap.
+  const anotherKeg = (k) => addItem({
+    name: k.name, source: k.source, unit: k.unit, notes: k.notes ?? '',
+    sponsor_prospect_id: k.sponsor_prospect_id ?? null, in_hand: Math.min(1, Number(k.in_hand) || 0),
+  })
+
   return (
     <>
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <p className="text-faint text-sm">
-          On hand vs. needed. "Needed" is shown in each item's own unit — oz, or bottles at {bottleOz} oz each. A keg (unit "kegs") is needed once for each tap it's on.
+          On hand vs. needed. "Needed" is shown in each item's own unit — oz, or bottles at {bottleOz} oz each. Kegs are one row per keg, and each goes on one tap; In hand is 1 once it's arrived.
         </p>
         <span className="flex gap-2 print:hidden">
           <button className="btn" onClick={() => addItem({ unit: 'kegs', source: 'sponsor' })} title="A keg item, ready to put on a bar's taps">+ Add keg</button>
@@ -105,8 +111,11 @@ export default function InventoryTab({ store, state }) {
                   {isKeg(item) && (
                     <div className="text-faint text-xs mt-0.5">
                       {usage[item.id]?.length
-                        ? `On tap: ${usage[item.id].map((u) => `${u.barName} ${u.tap}`).join(', ')}`
+                        ? `On tap: ${usage[item.id][0].barName} ${usage[item.id][0].tap}`
                         : 'Not on a tap yet (Bars tab)'}
+                      {' · '}
+                      <button type="button" className="text-gold hover:underline print:hidden" title="Another keg of the same thing, as its own row" onClick={() => anotherKeg(item)}>+1 keg</button>
+                      {Number(item.in_hand) > 1 && <span className="text-amber"> · One row is one keg — use +1 keg for each extra keg</span>}
                     </div>
                   )}
                 </td>

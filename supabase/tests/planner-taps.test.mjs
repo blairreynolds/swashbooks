@@ -24,9 +24,10 @@ await db.exec(`
 `)
 const MIGRATIONS = ['001_init', '002_import_presets', '003_planner', '004_crew_budget_lines', '005_sponsors',
   '006_tab_permissions', '007_function_hardening', '008_sponsor_stage_follow_ups', '009_sponsor_email',
-  '011_pitch_voice', '012_planner_taps']
+  '011_pitch_voice', '012_planner_taps', '013_one_tap_per_keg']
 for (const m of MIGRATIONS) await db.exec(read(`supabase/migrations/${m}.sql`))
 await db.exec(read('supabase/migrations/012_planner_taps.sql')) // re-runnable
+await db.exec(read('supabase/migrations/013_one_tap_per_keg.sql'))
 await db.exec(`grant usage on schema public, auth, storage to authenticated, anon;
   grant all on all tables in schema public to authenticated, anon;`)
 
@@ -55,6 +56,7 @@ async function as(who, sql, params) {
 }
 
 // A plan for 2027: two bars, two kegs (one linked to the sponsor), one mixer.
+// The IPA is (wrongly) listed on two taps, as an old export might have it.
 const ids = { bar1: crypto.randomUUID(), bar2: crypto.randomUUID(), ipa: crypto.randomUUID(), cider: crypto.randomUUID(), mix: crypto.randomUUID() }
 const state27 = {
   event: { attendees: 700, drinksPer: 2 },
@@ -89,13 +91,18 @@ let s27 = rowsToState(p27, { label: 'Ball 2027' })
 const deck = s27.bars.find((b) => b.name === 'Gun Deck')
 const nameOf = (st, id) => st.inventory.find((i) => i.id === id)?.name
 check('Tap count saved', deck.tapCount === 3, String(deck.tapCount))
-check('A tap past the bar\'s count is dropped', p27.taps.length === 3, String(p27.taps.length))
-check('Taps point at the right kegs after the id remap',
-  ['Breakside IPA', 'Breakside IPA', 'Cider'].join() === deck.taps.map((t) => nameOf(s27, t.inventoryId)).join())
+const tapsLine = deck.taps.map((t) => `${nameOf(s27, t.inventoryId)}@${t.tap}`).join()
+check('A tap past the bar\'s count, and a keg\'s second tap, are dropped', p27.taps.length === 2, String(p27.taps.length))
+check('Taps point at the right kegs after the id remap (IPA keeps tap 1)', tapsLine === 'Breakside IPA@1,Cider@3', tapsLine)
 check('Sponsor link kept within the same year', s27.inventory.find((i) => i.name === 'Breakside IPA').sponsorId === SPONSOR)
 const usage = tapsByKeg(s27)
 const ipaId = s27.inventory.find((i) => i.name === 'Breakside IPA').id
-check('tapsByKeg counts the IPA on two taps (one in hand: over)', usage[ipaId]?.length === 2)
+check('tapsByKeg has the IPA on one tap', usage[ipaId]?.length === 1)
+const deckId = p27.bars.find((b) => b.name === 'Gun Deck').id
+r = await as(PLANNER, `insert into planner_taps (bar_id, tap_number, inventory_id) values ($1, 2, $2)`, [deckId, ipaId])
+check('Putting a keg on a second tap is refused', !r.ok, r.error)
+r = await as(PLANNER, `insert into planner_taps (bar_id, tap_number) values ($1, 2)`, [deckId])
+check('Several empty taps are fine', r.ok, r.error)
 check('isKeg spots "kegs" and "1/6 bbl kegs", not bottles',
   s27.inventory.filter(isKeg).map((i) => i.name).sort().join() === 'Breakside IPA,Cider')
 
@@ -104,7 +111,7 @@ r = await as(PLANNER, `select planner_replace($1, $2)`, [Y28, JSON.stringify(sta
 check('Copying the plan to another year works', r.ok, r.error)
 const p28 = await plan(Y28)
 const s28 = rowsToState(p28, { label: 'Ball 2028' })
-check('Copied year keeps the taps', s28.bars.find((b) => b.name === 'Gun Deck').taps.length === 3)
+check('Copied year keeps the taps', s28.bars.find((b) => b.name === 'Gun Deck').taps.filter((t) => t.inventoryId).length === 2)
 check('Copied year has its own keg rows', !p28.inventory.some((i) => p27.inventory.some((j) => j.id === i.id)))
 check("Copied year drops the link to last year's sponsor", s28.inventory.every((i) => i.sponsorId === null))
 
@@ -113,7 +120,7 @@ const capped = await as(PLANNER, `update planner_bars set tap_count = 31 where i
 check('More than 30 taps is refused', !capped.ok)
 r = await as(PLANNER, `delete from planner_inventory where id = $1`, [ipaId])
 const after = (await db.query(`select inventory_id from planner_taps t join planner_bars b on b.id = t.bar_id where b.event_year_id = $1 order by tap_number`, [Y27])).rows
-check('Deleting a keg empties its taps', r.ok && after.filter((t) => t.inventory_id === null).length === 2, JSON.stringify(after))
+check('Deleting a keg empties its tap, other taps untouched', r.ok && after.length === 3 && after.filter((t) => t.inventory_id === null).length === 2, JSON.stringify(after))
 r = await as(PLANNER, `delete from planner_bars where name = 'Gun Deck' and event_year_id = $1`, [Y27])
 check('Deleting a bar removes its taps', r.ok && (await plan(Y27)).taps.length === 0)
 

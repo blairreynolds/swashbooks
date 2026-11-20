@@ -3,8 +3,8 @@ import { Field, NumField, ConfirmButton, JumpChips } from './widgets'
 
 const MAX_TAPS = 30
 
-// How many taps the bar has, and which keg is on each. Kegs are Inventory items
-// counted in kegs; one keg per tap, so a keg on more taps than are in hand is flagged.
+// How many taps the bar has, and which keg is on each. Each keg Inventory row is
+// one keg, and a keg goes on one tap only (the database enforces it too).
 function TapsEditor({ bar, taps, kegs, usage, store }) {
   const count = Number(bar.tap_count) || 0
   const byTap = Object.fromEntries(taps.map((t) => [t.tap_number, t]))
@@ -33,33 +33,27 @@ function TapsEditor({ bar, taps, kegs, usage, store }) {
         <button type="button" className="btn btn-sm" disabled={count <= 0} onClick={() => setCount(count - 1)} aria-label="One fewer tap">−</button>
         <span className="font-mono w-6 text-center">{count}</span>
         <button type="button" className="btn btn-sm" disabled={count >= MAX_TAPS} onClick={() => setCount(count + 1)} aria-label="One more tap">+</button>
-        {!kegs.length && <span className="text-faint text-xs">Add kegs on the Inventory tab (unit "kegs") to put them on tap.</span>}
+        {!kegs.length && <span className="text-faint text-xs">Add kegs on the Inventory tab (one row per keg) to put them on tap.</span>}
       </div>
       {count > 0 && (
         <div className="grid sm:grid-cols-2 gap-2">
           {Array.from({ length: count }, (_, i) => i + 1).map((n) => {
             const id = byTap[n]?.inventory_id ?? ''
-            const keg = kegs.find((k) => k.id === id)
-            const onTaps = usage[id]?.length ?? 0
-            const inHand = Number(keg?.in_hand) || 0
             return (
-              <div key={n} className="flex flex-col gap-0.5">
-                <div className="flex items-center gap-2">
-                  <span className="text-faint text-xs w-11 shrink-0">Tap {n}</span>
-                  <select className="input" value={id} onChange={(e) => setKeg(n, e.target.value)}>
-                    <option value="">— empty —</option>
-                    {kegs.map((k) => (
-                      <option key={k.id} value={k.id}>
-                        {k.name || '(unnamed keg)'} · {usage[k.id]?.length ?? 0} on tap of {Number(k.in_hand) || 0}
+              <div key={n} className="flex items-center gap-2">
+                <span className="text-faint text-xs w-11 shrink-0">Tap {n}</span>
+                <select className="input" value={id} onChange={(e) => setKeg(n, e.target.value)}>
+                  <option value="">— empty —</option>
+                  {kegs.map((k) => {
+                    // A keg is on one tap at most; one already tapped elsewhere is shown but can't be picked.
+                    const at = k.id === id ? null : usage[k.id]?.[0]
+                    return (
+                      <option key={k.id} value={k.id} disabled={!!at}>
+                        {k.name || '(unnamed keg)'}{at ? ` — on ${at.barName} tap ${at.tap}` : ''}
                       </option>
-                    ))}
-                  </select>
-                </div>
-                {keg && onTaps > inHand && (
-                  <span className="text-amber text-xs pl-13">
-                    On {onTaps} taps, but only {inHand} {inHand === 1 ? 'keg' : 'kegs'} in hand.
-                  </span>
-                )}
+                    )
+                  })}
+                </select>
               </div>
             )
           })}
