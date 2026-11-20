@@ -13,7 +13,7 @@ export async function replacePlan(eventYearId, state) {
 export async function fetchPlan(eventYearId) {
   const [s, bars, drinks, inv] = await Promise.all([
     supabase.from('planner_settings').select('*').eq('event_year_id', eventYearId).maybeSingle(),
-    supabase.from('planner_bars').select('*, planner_assignments(*)').eq('event_year_id', eventYearId),
+    supabase.from('planner_bars').select('*, planner_assignments(*), planner_taps(*)').eq('event_year_id', eventYearId),
     supabase.from('planner_drinks').select('*').eq('event_year_id', eventYearId),
     supabase.from('planner_inventory').select('*').eq('event_year_id', eventYearId),
   ])
@@ -24,12 +24,14 @@ export async function fetchPlan(eventYearId) {
   }
   if (!s.data) return { plan: null, missing: false }
   const assignments = []
-  const barRows = (bars.data ?? []).map(({ planner_assignments: as, ...b }) => {
+  const taps = []
+  const barRows = (bars.data ?? []).map(({ planner_assignments: as, planner_taps: ts, ...b }) => {
     assignments.push(...(as ?? []))
+    taps.push(...(ts ?? []))
     return b
   })
   return {
-    plan: { settings: s.data, bars: barRows, drinks: drinks.data ?? [], assignments, inventory: inv.data ?? [] },
+    plan: { settings: s.data, bars: barRows, drinks: drinks.data ?? [], assignments, taps, inventory: inv.data ?? [] },
     missing: false,
   }
 }

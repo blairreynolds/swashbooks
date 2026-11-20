@@ -1,8 +1,23 @@
-import { calcNeededIngredients, calcShoppingList, ozPerUnit } from '../../lib/plannerCalc'
+import { useEffect, useState } from 'react'
+import { supabase } from '../../lib/supabase'
+import { useApp } from '../../lib/AppContext'
+import { calcNeededIngredients, calcShoppingList, ozPerUnit, isKeg, tapsByKeg } from '../../lib/plannerCalc'
+import { stageOf } from '../../lib/sponsors'
 import { NumField, SourceSelect } from './widgets'
 import { fmtInt } from '../../lib/format'
 
-function NeededCells({ item, neededOz, bottleOz }) {
+function NeededCells({ item, neededOz, bottleOz, onTaps }) {
+  // A keg's need is one per tap it's on.
+  if (isKeg(item)) {
+    if (!onTaps) return <><td className="td-num text-faint" title="Not on any tap">—</td><td className="td-num text-faint">—</td></>
+    const short = Math.max(0, onTaps - (Number(item.in_hand) || 0))
+    return (
+      <>
+        <td className="td-num text-muted" title="One keg per tap">{onTaps}</td>
+        <td className={`td-num font-semibold ${short > 0 ? 'text-gold' : 'text-grn'}`}>{short > 0 ? `+${short}` : '✓'}</td>
+      </>
+    )
+  }
   if (!(neededOz > 0)) {
     return (
       <>
@@ -32,6 +47,16 @@ function NeededCells({ item, neededOz, bottleOz }) {
 
 export default function InventoryTab({ store, state }) {
   const { plan } = store
+  const { canSee } = useApp()
+  const showSponsors = canSee('sponsors')
+  const [prospects, setProspects] = useState([])
+  const yearId = plan.settings.event_year_id
+  useEffect(() => {
+    if (!showSponsors) return
+    supabase.from('sponsor_prospects').select('id, name, status').eq('event_year_id', yearId).order('name')
+      .then(({ data }) => setProspects(data ?? []))
+  }, [showSponsors, yearId])
+  const usage = tapsByKeg(state)
   const items = [...plan.inventory].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
   const needed = calcNeededIngredients(state)
   const bottleOz = state.event.bottleOz
@@ -56,9 +81,12 @@ export default function InventoryTab({ store, state }) {
     <>
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <p className="text-faint text-sm">
-          On hand vs. needed. "Needed" is shown in each item's own unit — oz, or bottles at {bottleOz} oz each.
+          On hand vs. needed. "Needed" is shown in each item's own unit — oz, or bottles at {bottleOz} oz each. A keg (unit "kegs") is needed once for each tap it's on.
         </p>
-        <button className="btn btn-primary print:hidden" onClick={() => addItem()}>+ Add item</button>
+        <span className="flex gap-2 print:hidden">
+          <button className="btn" onClick={() => addItem({ unit: 'kegs', source: 'sponsor' })} title="A keg item, ready to put on a bar's taps">+ Add keg</button>
+          <button className="btn btn-primary" onClick={() => addItem()}>+ Add item</button>
+        </span>
       </div>
 
       <div className="card overflow-x-auto">
@@ -66,24 +94,46 @@ export default function InventoryTab({ store, state }) {
           <thead>
             <tr>
               <th>Item</th><th>Source</th><th className="td-num">In hand</th><th>Unit</th>
-              <th className="td-num">Needed</th><th className="td-num">Still need</th><th>Notes</th><th />
+              <th className="td-num">Needed</th><th className="td-num">Still need</th>{showSponsors && <th>Sponsor</th>}<th>Notes</th><th />
             </tr>
           </thead>
           <tbody>
             {items.map((item) => (
               <tr key={item.id}>
-                <td><input className="input min-w-44" value={item.name} placeholder="Item name" onChange={(e) => set(item.id, { name: e.target.value })} /></td>
+                <td>
+                  <input className="input min-w-44" value={item.name} placeholder="Item name" onChange={(e) => set(item.id, { name: e.target.value })} />
+                  {isKeg(item) && (
+                    <div className="text-faint text-xs mt-0.5">
+                      {usage[item.id]?.length
+                        ? `On tap: ${usage[item.id].map((u) => `${u.barName} ${u.tap}`).join(', ')}`
+                        : 'Not on a tap yet (Bars tab)'}
+                    </div>
+                  )}
+                </td>
                 <td><SourceSelect className="min-w-36" value={item.source} onChange={(v) => set(item.id, { source: v })} /></td>
                 <td><NumField className="!w-24 text-right" value={item.in_hand} min="0" step="0.5" onChange={(v) => set(item.id, { in_hand: v })} /></td>
                 <td><input className="input !w-24" value={item.unit} onChange={(e) => set(item.id, { unit: e.target.value })} /></td>
-                <NeededCells item={item} neededOz={needed[item.name.toLowerCase()] || 0} bottleOz={bottleOz} />
+                <NeededCells item={item} neededOz={needed[item.name.toLowerCase()] || 0} bottleOz={bottleOz} onTaps={usage[item.id]?.length ?? 0} />
+                {showSponsors && (
+                  <td>
+                    <select
+                      className="input min-w-36"
+                      value={item.sponsor_prospect_id ?? ''}
+                      title="Who donated it (from the Sponsors page)"
+                      onChange={(e) => set(item.id, { sponsor_prospect_id: e.target.value || null })}
+                    >
+                      <option value="">—</option>
+                      {prospects.map((sp) => <option key={sp.id} value={sp.id}>{sp.name} ({stageOf(sp.status).label})</option>)}
+                    </select>
+                  </td>
+                )}
                 <td><input className="input min-w-40" value={item.notes ?? ''} placeholder="Notes" onChange={(e) => set(item.id, { notes: e.target.value })} /></td>
                 <td>
                   <button type="button" className="btn btn-sm btn-danger" title="Remove item" onClick={() => store.remove('planner_inventory', item.id)}>×</button>
                 </td>
               </tr>
             ))}
-            {!items.length && <tr><td colSpan={8} className="text-faint text-center py-6">No inventory items yet.</td></tr>}
+            {!items.length && <tr><td colSpan={showSponsors ? 9 : 8} className="text-faint text-center py-6">No inventory items yet.</td></tr>}
           </tbody>
         </table>
       </div>

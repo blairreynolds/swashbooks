@@ -1,5 +1,73 @@
-import { EQUIPMENT_OPTIONS, VESSELS, calcServingsAtBar } from '../../lib/plannerCalc'
+import { EQUIPMENT_OPTIONS, TAPS, VESSELS, calcServingsAtBar, isKeg, tapsByKeg } from '../../lib/plannerCalc'
 import { Field, NumField, ConfirmButton, JumpChips } from './widgets'
+
+const MAX_TAPS = 30
+
+// How many taps the bar has, and which keg is on each. Kegs are Inventory items
+// counted in kegs; one keg per tap, so a keg on more taps than are in hand is flagged.
+function TapsEditor({ bar, taps, kegs, usage, store }) {
+  const count = Number(bar.tap_count) || 0
+  const byTap = Object.fromEntries(taps.map((t) => [t.tap_number, t]))
+  const kegName = (id) => kegs.find((k) => k.id === id)?.name || 'a keg'
+
+  function setCount(next) {
+    next = Math.max(0, Math.min(MAX_TAPS, next))
+    const dropped = taps.filter((t) => t.tap_number > next)
+    const withKegs = dropped.filter((t) => t.inventory_id)
+    if (withKegs.length && !confirm(`Remove ${withKegs.map((t) => `tap ${t.tap_number} (${kegName(t.inventory_id)})`).join(', ')}?`)) return
+    dropped.forEach((t) => store.remove('planner_taps', t.id))
+    store.update('planner_bars', bar.id, { tap_count: next })
+  }
+
+  function setKeg(n, inventoryId) {
+    const row = byTap[n]
+    if (!inventoryId) { if (row) store.remove('planner_taps', row.id); return }
+    if (row) store.update('planner_taps', row.id, { inventory_id: inventoryId })
+    else store.insert('planner_taps', { bar_id: bar.id, tap_number: n, inventory_id: inventoryId })
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded bg-card2 p-3">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-faint text-xs">Taps</span>
+        <button type="button" className="btn btn-sm" disabled={count <= 0} onClick={() => setCount(count - 1)} aria-label="One fewer tap">−</button>
+        <span className="font-mono w-6 text-center">{count}</span>
+        <button type="button" className="btn btn-sm" disabled={count >= MAX_TAPS} onClick={() => setCount(count + 1)} aria-label="One more tap">+</button>
+        {!kegs.length && <span className="text-faint text-xs">Add kegs on the Inventory tab (unit "kegs") to put them on tap.</span>}
+      </div>
+      {count > 0 && (
+        <div className="grid sm:grid-cols-2 gap-2">
+          {Array.from({ length: count }, (_, i) => i + 1).map((n) => {
+            const id = byTap[n]?.inventory_id ?? ''
+            const keg = kegs.find((k) => k.id === id)
+            const onTaps = usage[id]?.length ?? 0
+            const inHand = Number(keg?.in_hand) || 0
+            return (
+              <div key={n} className="flex flex-col gap-0.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-faint text-xs w-11 shrink-0">Tap {n}</span>
+                  <select className="input" value={id} onChange={(e) => setKeg(n, e.target.value)}>
+                    <option value="">— empty —</option>
+                    {kegs.map((k) => (
+                      <option key={k.id} value={k.id}>
+                        {k.name || '(unnamed keg)'} · {usage[k.id]?.length ?? 0} on tap of {Number(k.in_hand) || 0}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {keg && onTaps > inHand && (
+                  <span className="text-amber text-xs pl-13">
+                    On {onTaps} taps, but only {inHand} {inHand === 1 ? 'keg' : 'kegs'} in hand.
+                  </span>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
 
 const VOLUMES = [
   { weight: 1.5, label: 'Heavy', hint: '1.5×', color: '#e8a020', active: (w) => w >= 1.4 },
@@ -39,14 +107,27 @@ function AssignmentRow({ a, bar, drinks, state, store }) {
   )
 }
 
-function BarCard({ bar, assignments, drinks, state, store }) {
+function BarCard({ bar, assignments, taps, kegs, usage, drinks, state, store }) {
   const set = (patch) => store.update('planner_bars', bar.id, patch)
   const weight = Number(bar.volume_weight) || 1
   const equipment = bar.equipment ?? []
   const allEquipment = [...EQUIPMENT_OPTIONS, ...equipment.filter((e) => !EQUIPMENT_OPTIONS.includes(e))]
 
   function toggleEquipment(eq) {
-    set({ equipment: equipment.includes(eq) ? equipment.filter((e) => e !== eq) : [...equipment, eq] })
+    const on = equipment.includes(eq)
+    if (eq === TAPS && on) {
+      // Switching taps off clears the bar's taps and the kegs on them.
+      const tapped = taps.filter((t) => t.inventory_id)
+      if (tapped.length && !confirm(`Turn off taps? This takes the ${tapped.length} ${tapped.length === 1 ? 'keg' : 'kegs'} off this bar's taps.`)) return
+      taps.forEach((t) => store.remove('planner_taps', t.id))
+      set({ equipment: equipment.filter((e) => e !== eq), tap_count: 0 })
+      return
+    }
+    if (eq === TAPS) {
+      set({ equipment: [...equipment, eq], tap_count: Math.max(1, Number(bar.tap_count) || 0) })
+      return
+    }
+    set({ equipment: on ? equipment.filter((e) => e !== eq) : [...equipment, eq] })
   }
 
   function addAssignment() {
@@ -111,12 +192,14 @@ function BarCard({ bar, assignments, drinks, state, store }) {
                 className={`chip cursor-pointer border ${on ? 'chip-gold border-gold/40' : 'chip-muted border-transparent'}`}
                 onClick={() => toggleEquipment(eq)}
               >
-                {on ? '✓ ' : ''}{eq}
+                {on ? '✓ ' : ''}{eq}{eq === TAPS && on ? ` (${Number(bar.tap_count) || 0})` : ''}
               </button>
             )
           })}
         </div>
       </div>
+
+      {equipment.includes(TAPS) && <TapsEditor bar={bar} taps={taps} kegs={kegs} usage={usage} store={store} />}
 
       <div className="flex flex-col gap-1.5">
         <div className="text-faint text-xs">Drink assignments</div>
@@ -143,12 +226,14 @@ export default function BarsTab({ store, state }) {
   const bySort = (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)
   const bars = [...plan.bars].sort(bySort)
   const drinks = [...plan.drinks].sort(bySort)
+  const kegs = [...plan.inventory].filter(isKeg).sort(bySort)
+  const usage = tapsByKeg(state)
 
   async function addBar() {
     const sort = Math.max(-1, ...plan.bars.map((b) => b.sort_order ?? 0)) + 1
     const row = await store.insert('planner_bars', {
       event_year_id: plan.settings.event_year_id, name: 'New Bar', location: '', shift1: '', shift2: '',
-      equipment: [], notes: '', volume_weight: 1, sort_order: sort,
+      equipment: [], notes: '', volume_weight: 1, sort_order: sort, tap_count: 0,
     })
     setTimeout(() => document.getElementById(`bar-${row.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
   }
@@ -165,6 +250,9 @@ export default function BarsTab({ store, state }) {
           key={bar.id}
           bar={bar}
           assignments={plan.assignments.filter((a) => a.bar_id === bar.id).sort(bySort)}
+          taps={plan.taps.filter((t) => t.bar_id === bar.id)}
+          kegs={kegs}
+          usage={usage}
           drinks={drinks}
           state={state}
           store={store}

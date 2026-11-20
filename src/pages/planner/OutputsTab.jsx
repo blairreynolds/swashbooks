@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { SOURCES, calcShoppingList, calcByBar, calcServingsAtBar, findInventory } from '../../lib/plannerCalc'
+import { SOURCES, TAPS, calcShoppingList, calcByBar, calcServingsAtBar, findInventory } from '../../lib/plannerCalc'
 import { SourceBadge } from './widgets'
 import { fmtInt } from '../../lib/format'
 
@@ -14,6 +14,29 @@ const OUTPUTS = [
 const Empty = ({ children }) => <div className="card text-faint text-sm text-center py-8">{children}</div>
 
 const byOzDesc = (a, b) => b.oz - a.oz
+
+// Every tap on a bar, in order, with the keg's name (or null if it's empty).
+function tapList(state, bar) {
+  if (!bar.equipment.includes(TAPS) || !bar.tapCount) return []
+  return Array.from({ length: bar.tapCount }, (_, i) => {
+    const t = bar.taps.find((x) => x.tap === i + 1)
+    return { tap: i + 1, name: state.inventory.find((it) => it.id === t?.inventoryId)?.name || null }
+  })
+}
+
+function TapLines({ taps }) {
+  if (!taps.length) return null
+  return (
+    <div className="mb-3">
+      <div className="text-faint text-[10px] uppercase tracking-widest font-semibold mb-1">On tap</div>
+      <div className="flex flex-col gap-0.5 text-sm">
+        {taps.map((t) => (
+          <div key={t.tap}><span className="text-faint font-mono text-xs mr-2">{t.tap}</span>{t.name ?? <span className="text-faint italic">empty</span>}</div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 function BeamOrder({ state }) {
   const items = Object.values(calcShoppingList(state).beam || {}).sort(byOzDesc)
@@ -154,9 +177,10 @@ function BarSheets({ state }) {
         </div>
         {bar.equipment.length > 0 && (
           <div className="flex gap-1.5 flex-wrap mb-3">
-            {bar.equipment.map((e) => <span key={e} className="chip chip-muted">{e}</span>)}
+            {bar.equipment.map((e) => <span key={e} className="chip chip-muted">{e}{e === TAPS ? ` (${bar.tapCount})` : ''}</span>)}
           </div>
         )}
+        <TapLines taps={tapList(state, bar)} />
         {drinks.length ? (
           <>
             <div className="text-faint text-[10px] uppercase tracking-widest font-semibold mb-1">Menu</div>
@@ -184,16 +208,20 @@ function BarSheets({ state }) {
 
 function MenuBrief({ state }) {
   const bars = state.bars
-    .map((bar) => ({ bar, drinks: bar.drinks.map((a) => state.drinks.find((d) => d.id === a.drinkId)).filter(Boolean) }))
-    .filter((b) => b.drinks.length)
-  if (!bars.length) return <Empty>Assign drinks to bars to generate the menu brief.</Empty>
+    .map((bar) => ({
+      bar,
+      drinks: bar.drinks.map((a) => state.drinks.find((d) => d.id === a.drinkId)).filter(Boolean),
+      onTap: tapList(state, bar).filter((t) => t.name),
+    }))
+    .filter((b) => b.drinks.length || b.onTap.length)
+  if (!bars.length) return <Empty>Assign drinks or kegs to bars to generate the menu brief.</Empty>
   return (
     <>
       <div className="card">
         <div className="font-display text-lg">{state.event.name} — Menu Brief</div>
         <div className="text-faint text-sm">For graphic design. Each bar's assigned drinks with full descriptions and garnish.</div>
       </div>
-      {bars.map(({ bar, drinks }) => (
+      {bars.map(({ bar, drinks, onTap }) => (
         <div key={bar.id} className="card break-inside-avoid">
           <div className="flex items-baseline justify-between gap-3 mb-3 pb-2 border-b border-bdr flex-wrap">
             <div>
@@ -235,6 +263,12 @@ function MenuBrief({ state }) {
               )
             })}
           </div>
+          {onTap.length > 0 && (
+            <div className={`p-3 rounded bg-card2 ${drinks.length ? 'mt-2' : ''}`} style={{ borderLeft: '3px solid var(--amber)' }}>
+              <div className="text-[10px] uppercase tracking-wider text-faint font-semibold mb-1">On tap</div>
+              <div className="text-sm">{[...new Set(onTap.map((t) => t.name))].join(' · ')}</div>
+            </div>
+          )}
           {bar.notes && <div className="text-faint text-xs mt-3 pt-2 border-t border-bdr">📌 {bar.notes}</div>}
         </div>
       ))}

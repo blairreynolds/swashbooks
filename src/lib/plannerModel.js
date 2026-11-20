@@ -84,6 +84,11 @@ export function rowsToState(plan, eventYear) {
       equipment: b.equipment ?? [],
       notes: b.notes ?? '',
       volumeWeight: num(b.volume_weight, 1),
+      tapCount: num(b.tap_count),
+      taps: (plan.taps ?? [])
+        .filter((t) => t.bar_id === b.id && t.tap_number <= num(b.tap_count))
+        .sort((x, y) => x.tap_number - y.tap_number)
+        .map((t) => ({ tap: t.tap_number, inventoryId: t.inventory_id ?? '' })),
       drinks: plan.assignments
         .filter((a) => a.bar_id === b.id)
         .sort(bySort)
@@ -107,6 +112,7 @@ export function rowsToState(plan, eventYear) {
       inHand: num(i.in_hand),
       unit: i.unit ?? '',
       notes: i.notes ?? '',
+      sponsorId: i.sponsor_prospect_id ?? null,
     })),
   }
 }
@@ -138,9 +144,35 @@ export function stateToPayload(state) {
     }
   })
 
+  // Inventory first: taps point at inventory items by id.
+  const invIdMap = {}
+  const inventory = (state.inventory ?? []).map((it, i) => {
+    const id = crypto.randomUUID()
+    if (it.id) invIdMap[it.id] = id
+    return {
+      id,
+      name: it.name ?? '',
+      source: it.source || 'you',
+      in_hand: num(it.inHand),
+      unit: it.unit || 'bottles',
+      notes: it.notes ?? '',
+      sort_order: i,
+      // The database drops a link to another year's sponsor (migration 012).
+      sponsor_prospect_id: it.sponsorId ?? null,
+    }
+  })
+
   const assignments = []
+  const taps = []
   const bars = state.bars.map((b, i) => {
     const id = crypto.randomUUID()
+    const tapCount = Math.min(30, Math.max(0, Math.round(num(b.tapCount))))
+    ;(b.taps ?? []).forEach((t) => {
+      const tap = Math.round(num(t.tap))
+      if (tap >= 1 && tap <= tapCount) {
+        taps.push({ id: crypto.randomUUID(), bar_id: id, tap_number: tap, inventory_id: invIdMap[t.inventoryId] ?? null })
+      }
+    })
     ;(b.drinks ?? []).forEach((a, j) => {
       assignments.push({
         id: crypto.randomUUID(),
@@ -163,18 +195,9 @@ export function stateToPayload(state) {
       notes: b.notes ?? '',
       volume_weight: num(b.volumeWeight, 1) || 1,
       sort_order: i,
+      tap_count: tapCount,
     }
   })
-
-  const inventory = (state.inventory ?? []).map((it, i) => ({
-    id: crypto.randomUUID(),
-    name: it.name ?? '',
-    source: it.source || 'you',
-    in_hand: num(it.inHand),
-    unit: it.unit || 'bottles',
-    notes: it.notes ?? '',
-    sort_order: i,
-  }))
 
   const settings = {
     attendees: Math.round(num(e.attendees, 700)) || 700,
@@ -188,5 +211,5 @@ export function stateToPayload(state) {
     overage_garnish: num(e.overageGarnish, 20),
   }
 
-  return { settings, bars, drinks, assignments, inventory }
+  return { settings, bars, drinks, assignments, taps, inventory }
 }

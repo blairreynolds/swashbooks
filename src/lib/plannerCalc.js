@@ -4,10 +4,11 @@
 //   event:     { name, date, attendees, drinksPer, snpOz, galOz, bucketOz, bottleOz,
 //                overageSpirits, overageMix, overageGarnish }
 //   bars[]:    { id, name, location, shift1, shift2, equipment[], notes, volumeWeight,
-//                drinks[{ id, drinkId, vessel, override }] }
+//                drinks[{ id, drinkId, vessel, override }],
+//                tapCount, taps[{ tap, inventoryId }] }
 //   drinks[]:  { id, type, name, active, servingOz, description, garnish, notes,
 //                ingredients[{ name, oz, source }] }
-//   inventory[]: { id, name, source, inHand, unit, notes }
+//   inventory[]: { id, name, source, inHand, unit, notes, sponsorId }
 //
 // Model:
 //   Total cocktail servings = attendees × drinksPer
@@ -26,10 +27,27 @@ export const SOURCES = {
 
 export const DRINK_TYPES = { cocktail: 'Cocktail', beer: 'Beer/Wine', na: 'Non-Alcoholic' }
 
+export const TAPS = 'Taps'
 export const EQUIPMENT_OPTIONS = [
-  'Kegerator', 'Slushee Machine', 'Air Pot', 'Portable Bar',
+  'Kegerator', TAPS, 'Slushee Machine', 'Air Pot', 'Portable Bar',
   'Ice Bin/Cooler', 'Dump Bucket', "Stor'n Pour Station", 'Speed Rail', 'POS Terminal',
 ]
+
+// Kegs are inventory items counted in kegs ("kegs", "1/2 bbl kegs", …).
+export const isKeg = (item) => /\bkegs?\b/i.test(item?.unit ?? '')
+
+// Where each keg is tapped: inventoryId -> [{ barId, barName, tap }], in bar order.
+export function tapsByKeg(state) {
+  const out = {}
+  for (const bar of state.bars) {
+    if (!bar.equipment.includes(TAPS)) continue
+    for (const t of bar.taps ?? []) {
+      if (!t.inventoryId || t.tap > bar.tapCount) continue
+      ;(out[t.inventoryId] ??= []).push({ barId: bar.id, barName: bar.name, tap: t.tap })
+    }
+  }
+  return out
+}
 
 export const VESSELS = {
   snp: "Stor'n Pour", gallon: 'Gallon jug', bucket: 'Bucket', bottle: 'Bottle', keg: 'Keg', can: 'Cans',

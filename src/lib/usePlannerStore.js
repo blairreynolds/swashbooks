@@ -7,6 +7,7 @@ const COLL = {
   planner_drinks: 'drinks',
   planner_assignments: 'assignments',
   planner_inventory: 'inventory',
+  planner_taps: 'taps',
 }
 const DEBOUNCE_MS = 700
 
@@ -130,11 +131,14 @@ export function usePlannerStore(eventYearId) {
   const remove = useCallback(async (table, id) => {
     const coll = COLL[table]
     const current = planRef.current
-    // The database cascades assignment deletes; drop their queued edits too.
+    // The database cascades assignment and tap deletes; drop their queued edits too.
     const doomed = new Set([`${table}:${id}`])
     if (current && (table === 'planner_bars' || table === 'planner_drinks')) {
       const col = table === 'planner_bars' ? 'bar_id' : 'drink_id'
       current.assignments.filter((a) => a[col] === id).forEach((a) => doomed.add(`planner_assignments:${a.id}`))
+    }
+    if (current && table === 'planner_bars') {
+      current.taps.filter((t) => t.bar_id === id).forEach((t) => doomed.add(`planner_taps:${t.id}`))
     }
     for (const key of doomed) {
       const p = pending.current.get(key)
@@ -142,7 +146,12 @@ export function usePlannerStore(eventYearId) {
     }
     setPlan((prev) => {
       const next = { ...prev, [coll]: prev[coll].filter((r) => r.id !== id) }
-      if (table === 'planner_bars') next.assignments = prev.assignments.filter((a) => a.bar_id !== id)
+      if (table === 'planner_bars') {
+        next.assignments = prev.assignments.filter((a) => a.bar_id !== id)
+        next.taps = prev.taps.filter((t) => t.bar_id !== id)
+      }
+      // Removing a keg empties the taps it was on (the database sets them null).
+      if (table === 'planner_inventory') next.taps = prev.taps.map((t) => (t.inventory_id === id ? { ...t, inventory_id: null } : t))
       if (table === 'planner_drinks') next.assignments = prev.assignments.filter((a) => a.drink_id !== id)
       return next
     })
